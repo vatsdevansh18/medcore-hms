@@ -22,15 +22,15 @@ Reference points named in the brief — Practo's doctor portal, Epic's Hyperspac
 
 A restrained clinical palette: a desaturated blue as the primary/brand hue (trust, calm, matches the "medical software" register without becoming sterile-white), a neutral gray scale for structure, and semantic colours reserved strictly for status:
 
-| Token | Light | Dark | Usage |
-|---|---|---|---|
-| `--color-primary` | `#0A2A5E` | `#5B8DEF` | Primary actions, active nav, links |
-| `--color-primary-surface` | `#E3F0FC` | `#132A4D` | Selected rows, active tab background |
-| `--color-neutral-900..50` | grayscale ramp | inverted ramp | Text, borders, surfaces |
-| `--color-success` | `#1B7F4C` | `#4ADE80` | Completed, Paid, Approved |
-| `--color-warning` | `#B45309` | `#FBBF24` | Pending, Low stock, Out-of-range (borderline) |
-| `--color-danger` | `#B91C1C` | `#F87171` | Cancelled, Expired, Critical out-of-range, Errors |
-| `--color-info` | `#1D4ED8` | `#60A5FA` | In-progress, informational banners |
+| Token                     | Light          | Dark          | Usage                                             |
+| ------------------------- | -------------- | ------------- | ------------------------------------------------- |
+| `--color-primary`         | `#0A2A5E`      | `#5B8DEF`     | Primary actions, active nav, links                |
+| `--color-primary-surface` | `#E3F0FC`      | `#132A4D`     | Selected rows, active tab background              |
+| `--color-neutral-900..50` | grayscale ramp | inverted ramp | Text, borders, surfaces                           |
+| `--color-success`         | `#1B7F4C`      | `#4ADE80`     | Completed, Paid, Approved                         |
+| `--color-warning`         | `#B45309`      | `#FBBF24`     | Pending, Low stock, Out-of-range (borderline)     |
+| `--color-danger`          | `#B91C1C`      | `#F87171`     | Cancelled, Expired, Critical out-of-range, Errors |
+| `--color-info`            | `#1D4ED8`      | `#60A5FA`     | In-progress, informational banners                |
 
 Colour tokens are defined once as CSS variables and consumed by Tailwind's theme extension — never hard-coded hex values in components. Dark mode is a supported, not an afterthought: every token has a dark-mode pair from day one.
 
@@ -92,11 +92,11 @@ Every data-bearing view defines all four explicitly — this is treated as a com
 
 ## 4. Responsive Behaviour
 
-| Breakpoint | Target | Notes |
-|---|---|---|
-| `< 640px` | Mobile | Patient portal fully supported; staff tools show a "best on larger screens" notice but remain functionally usable for quick lookups. |
-| `640–1024px` | Tablet | Staff tools usable for rounds/bedside use (nurse vitals entry, doctor quick lookup); sidebar collapses to icons. |
-| `> 1024px` | Desktop | Primary target for all staff workflows; full table/dashboard density. |
+| Breakpoint   | Target  | Notes                                                                                                                                |
+| ------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `< 640px`    | Mobile  | Patient portal fully supported; staff tools show a "best on larger screens" notice but remain functionally usable for quick lookups. |
+| `640–1024px` | Tablet  | Staff tools usable for rounds/bedside use (nurse vitals entry, doctor quick lookup); sidebar collapses to icons.                     |
+| `> 1024px`   | Desktop | Primary target for all staff workflows; full table/dashboard density.                                                                |
 
 Per the brief and PRD, hospital staff primarily use larger screens, so staff-facing density is optimised for desktop first; the patient portal is designed mobile-first and progressively enhanced upward, since patients predominantly use phones.
 

@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+WORKDIR /workspace
+
+# ---- deps ----
+FROM base AS deps
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/types/package.json packages/types/package.json
+COPY packages/config/package.json packages/config/package.json
+COPY apps/frontend/package.json apps/frontend/package.json
+RUN pnpm install --frozen-lockfile --filter=@medcore/frontend...
+
+# ---- dev: used by docker-compose.yml for local development (hot reload via bind mount) ----
+FROM deps AS dev
+COPY packages/types packages/types
+COPY packages/config packages/config
+COPY apps/frontend apps/frontend
+# @medcore/types is consumed as compiled JS (see packages/types/package.json) — build it
+# once into the image; apps/frontend's own source is bind-mounted for hot reload instead.
+RUN pnpm --filter=@medcore/types run build
+EXPOSE 3000
+CMD ["pnpm", "--filter=@medcore/frontend", "run", "dev"]
+
+# ---- build ----
+FROM deps AS build
+COPY packages/types packages/types
+COPY packages/config packages/config
+COPY apps/frontend apps/frontend
+RUN pnpm -r --if-present run build
+
+# ---- runtime: Next.js standalone production server (used from Phase 16 onward) ----
+FROM base AS runtime
+ENV NODE_ENV=production
+COPY --from=build /workspace/apps/frontend/public ./apps/frontend/public
+COPY --from=build /workspace/apps/frontend/.next/standalone ./
+COPY --from=build /workspace/apps/frontend/.next/static ./apps/frontend/.next/static
+EXPOSE 3000
+CMD ["node", "apps/frontend/server.js"]

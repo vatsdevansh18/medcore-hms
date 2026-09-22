@@ -15,7 +15,7 @@ Each entry: context, alternatives considered, decision, rationale, consequences.
 
 **Decision:** (c). `05-DEVELOPMENT-PLAN.md` maps every brief week to specific phases (Week 1 → Phases 1–4, Week 2 → Phases 5–7, Week 3 → Phases 8–11, Week 4 → Phases 12–17) so the sequencing intent is preserved without inheriting a hard calendar.
 
-**Rationale:** The user's own build prompt explicitly overrides the brief's process guidance while treating the brief as the source of truth for *scope*. Quality gates (tests, security review, docs) matter more than hitting an artificial weekly boundary for a portfolio-grade deliverable.
+**Rationale:** The user's own build prompt explicitly overrides the brief's process guidance while treating the brief as the source of truth for _scope_. Quality gates (tests, security review, docs) matter more than hitting an artificial weekly boundary for a portfolio-grade deliverable.
 
 **Consequences:** No phase is time-boxed; each is boxed by its gate criteria instead. The project report (Phase 17) should still narrate progress against the original weekly framing for evaluator familiarity.
 
@@ -26,9 +26,10 @@ Each entry: context, alternatives considered, decision, rationale, consequences.
 **Context:** The brief explicitly asks for a justified choice between database-per-tenant, schema-per-tenant, and row-level multi-tenancy, and its own architecture hints already describe a `hospitalId` foreign key pattern.
 
 **Alternatives considered:**
-- *Database-per-tenant:* strongest isolation, but operationally heavy (migrations, connection pooling, and backups multiply per hospital) — wrong trade for a solo-built system expected to demo many hospitals cheaply.
-- *Schema-per-tenant:* isolation without full infrastructure duplication, but Prisma's migration tooling and connection handling for dynamic schemas add non-trivial complexity for a project of this scope.
-- *Row-level (chosen):* single schema, single connection pool, `hospitalId` foreign key everywhere, isolation enforced in application code and query layer.
+
+- _Database-per-tenant:_ strongest isolation, but operationally heavy (migrations, connection pooling, and backups multiply per hospital) — wrong trade for a solo-built system expected to demo many hospitals cheaply.
+- _Schema-per-tenant:_ isolation without full infrastructure duplication, but Prisma's migration tooling and connection handling for dynamic schemas add non-trivial complexity for a project of this scope.
+- _Row-level (chosen):_ single schema, single connection pool, `hospitalId` foreign key everywhere, isolation enforced in application code and query layer.
 
 **Decision:** Row-level multi-tenancy with the three-layer enforcement described in `03-ARCHITECTURE.md` §5.
 
@@ -71,9 +72,10 @@ Each entry: context, alternatives considered, decision, rationale, consequences.
 **Context:** The brief explicitly asks for either database-level locking (`SELECT FOR UPDATE`) or an optimistic concurrency pattern, with reasoning documented.
 
 **Alternatives considered:**
-- *Optimistic concurrency* (version column, retry on conflict): works, but only if every write path remembers to check the version — a single missed check anywhere reintroduces the race.
-- *`SELECT ... FOR UPDATE` pessimistic row lock* on a slot/availability row: correct, but requires a row to lock *before* the conflicting row exists, which is awkward when the conflict is between two not-yet-existing `Appointment` rows for the same slot.
-- *Postgres `EXCLUDE` constraint* (chosen): makes the overlap itself structurally impossible at the storage engine level, independent of application code paths.
+
+- _Optimistic concurrency_ (version column, retry on conflict): works, but only if every write path remembers to check the version — a single missed check anywhere reintroduces the race.
+- _`SELECT ... FOR UPDATE` pessimistic row lock_ on a slot/availability row: correct, but requires a row to lock _before_ the conflicting row exists, which is awkward when the conflict is between two not-yet-existing `Appointment` rows for the same slot.
+- _Postgres `EXCLUDE` constraint_ (chosen): makes the overlap itself structurally impossible at the storage engine level, independent of application code paths.
 
 **Decision:** `EXCLUDE USING gist` constraints on `(doctorId, tsrange)` and `(patientId, tsrange)`, scoped to active statuses, per `03-ARCHITECTURE.md` §8.
 
@@ -91,7 +93,7 @@ Each entry: context, alternatives considered, decision, rationale, consequences.
 
 **Decision:** One generic `StaffProfile` (employee code, department, join date) for the six roles without materially distinct structured attributes in this project's scope; `DoctorProfile` and `PatientProfile` remain dedicated because their domain data (specialisation, licence, availability / DOB, blood group, allergies) is genuinely rich and distinct.
 
-**Rationale:** Avoids six near-identical tables that would add schema noise without adding modelling value at this scope; each role's *behaviour* is still fully differentiated by the `role` enum on `User` and by RBAC, not by the profile table shape.
+**Rationale:** Avoids six near-identical tables that would add schema noise without adding modelling value at this scope; each role's _behaviour_ is still fully differentiated by the `role` enum on `User` and by RBAC, not by the profile table shape.
 
 **Consequences:** If a future requirement gives one of these roles genuinely distinct structured data (e.g. Lab Technician certifications), it is added as its own table at that point rather than retrofitted into the generic one — this is called out explicitly so it isn't mistaken for an oversight later.
 

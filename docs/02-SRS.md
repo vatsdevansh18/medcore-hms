@@ -8,29 +8,29 @@
 
 Every non-trivial requirement in this document and its dependents carries a stable ID so it can be traced to code, tests, and phase reviews.
 
-| Prefix | Domain |
-|---|---|
-| `FR-AUTH` | Authentication & sessions |
-| `FR-RBAC` | Roles & permissions |
-| `FR-TENANT` | Multi-tenancy |
-| `FR-HOSP` | Hospital / department / staff management |
-| `FR-APPT` | Appointments & scheduling |
-| `FR-EMR` | Electronic medical records |
-| `FR-RX` | Prescriptions |
-| `FR-LAB` | Laboratory |
-| `FR-PHARM` | Pharmacy / inventory |
-| `FR-BILL` | Billing & payments |
-| `FR-NOTIF` | Notifications |
-| `FR-PORTAL` | Patient portal |
-| `FR-ANALYTICS` | Dashboards & analytics |
-| `FR-SEARCH` | Global search |
-| `NFR-PERF` | Performance |
-| `NFR-SCALE` | Scalability |
-| `NFR-AVAIL` | Availability & resilience |
-| `NFR-A11Y` | Accessibility |
-| `NFR-OBS` | Observability |
-| `NFR-COMPAT` | Compatibility |
-| `SEC-*` | Security (full catalog in `09-SECURITY.md`, cross-referenced here) |
+| Prefix         | Domain                                                             |
+| -------------- | ------------------------------------------------------------------ |
+| `FR-AUTH`      | Authentication & sessions                                          |
+| `FR-RBAC`      | Roles & permissions                                                |
+| `FR-TENANT`    | Multi-tenancy                                                      |
+| `FR-HOSP`      | Hospital / department / staff management                           |
+| `FR-APPT`      | Appointments & scheduling                                          |
+| `FR-EMR`       | Electronic medical records                                         |
+| `FR-RX`        | Prescriptions                                                      |
+| `FR-LAB`       | Laboratory                                                         |
+| `FR-PHARM`     | Pharmacy / inventory                                               |
+| `FR-BILL`      | Billing & payments                                                 |
+| `FR-NOTIF`     | Notifications                                                      |
+| `FR-PORTAL`    | Patient portal                                                     |
+| `FR-ANALYTICS` | Dashboards & analytics                                             |
+| `FR-SEARCH`    | Global search                                                      |
+| `NFR-PERF`     | Performance                                                        |
+| `NFR-SCALE`    | Scalability                                                        |
+| `NFR-AVAIL`    | Availability & resilience                                          |
+| `NFR-A11Y`     | Accessibility                                                      |
+| `NFR-OBS`      | Observability                                                      |
+| `NFR-COMPAT`   | Compatibility                                                      |
+| `SEC-*`        | Security (full catalog in `09-SECURITY.md`, cross-referenced here) |
 
 Each FR/NFR below states **Requirement**, **Rationale** (why, tied to the brief or a business rule), and **Acceptance Signal** (how a test or review confirms it).
 
@@ -38,9 +38,9 @@ Each FR/NFR below states **Requirement**, **Rationale** (why, tied to the brief 
 
 ### 2.1 Authentication & Sessions (`FR-AUTH`)
 
-- **FR-AUTH-001** — Users register with email, password, and role-appropriate profile data; the account is `PENDING` until email is verified via a 6-digit OTP with a 10-minute TTL. *Acceptance:* unverified accounts cannot log in; OTP expires and is single-use.
-- **FR-AUTH-002** — Login issues a 15-minute JWT access token and a 7-day opaque refresh token delivered in an `httpOnly`, `Secure`, `SameSite=Strict` cookie. *Acceptance:* access token is rejected 1 second after its `exp`; refresh cookie is never readable from JS.
-- **FR-AUTH-003** — Every refresh exchange rotates the refresh token: the old token is revoked and a new one issued in the same response. *Acceptance:* replaying a rotated-out refresh token fails and revokes the entire session family (see `SEC-AUTHN-004`).
+- **FR-AUTH-001** — Users register with email, password, and role-appropriate profile data; the account is `PENDING` until email is verified via a 6-digit OTP with a 10-minute TTL. _Acceptance:_ unverified accounts cannot log in; OTP expires and is single-use.
+- **FR-AUTH-002** — Login issues a 15-minute JWT access token and a 7-day opaque refresh token delivered in an `httpOnly`, `Secure`, `SameSite=Strict` cookie. _Acceptance:_ access token is rejected 1 second after its `exp`; refresh cookie is never readable from JS.
+- **FR-AUTH-003** — Every refresh exchange rotates the refresh token: the old token is revoked and a new one issued in the same response. _Acceptance:_ replaying a rotated-out refresh token fails and revokes the entire session family (see `SEC-AUTHN-004`).
 - **FR-AUTH-004** — Users can request a password reset; the reset token is single-use, expires in 60 minutes, and invalidates all other pending reset tokens for that user on use.
 - **FR-AUTH-005** — Phone verification via Twilio SMS OTP follows the same shape as email OTP (`FR-AUTH-001`).
 - **FR-AUTH-006** — Users can view and revoke individual device sessions, or revoke all sessions ("log out everywhere") from `GET/DELETE /auth/sessions`.

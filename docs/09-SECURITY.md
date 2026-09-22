@@ -10,17 +10,17 @@
 
 ## 2. Threat Model Summary (STRIDE-Oriented)
 
-| Threat | Primary asset at risk | Mitigation (ID) |
-|---|---|---|
-| Spoofing a user identity | Session/auth | bcrypt, JWT signature, refresh rotation+reuse detection (`SEC-AUTHN-*`) |
-| Tampering with tenant-scoped IDs to read another hospital's data | Patient/clinical/financial records | Three-layer tenancy enforcement (`SEC-TENANT-*`) |
-| Repudiation of a clinical or billing action | Legal/audit trail | Immutable `AuditLog` on every write (`SEC-AUDIT-*`) |
-| Information disclosure of medical notes at rest | Clinical data | App-level field encryption (`SEC-DATA-001`) |
-| Information disclosure via verbose errors | Any | Normalised error envelope, no stack traces (`SEC-DATA-004`) |
-| Denial of service via auth endpoint abuse | Availability | Rate limiting (`SEC-NET-003`) |
-| Elevation of privilege via role/tenant confusion | All modules | RBAC guard chain, `07-RBAC-MATRIX.md` as enforced spec (`SEC-AUTHZ-*`) |
-| Forged payment confirmation | Billing integrity | Server never trusts client payment callback; webhook signature verification (`SEC-PAY-*`) |
-| Malicious file upload | Server/storage | MIME+extension allow-list, size cap, no public bucket (`SEC-FILE-*`) |
+| Threat                                                           | Primary asset at risk              | Mitigation (ID)                                                                           |
+| ---------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| Spoofing a user identity                                         | Session/auth                       | bcrypt, JWT signature, refresh rotation+reuse detection (`SEC-AUTHN-*`)                   |
+| Tampering with tenant-scoped IDs to read another hospital's data | Patient/clinical/financial records | Three-layer tenancy enforcement (`SEC-TENANT-*`)                                          |
+| Repudiation of a clinical or billing action                      | Legal/audit trail                  | Immutable `AuditLog` on every write (`SEC-AUDIT-*`)                                       |
+| Information disclosure of medical notes at rest                  | Clinical data                      | App-level field encryption (`SEC-DATA-001`)                                               |
+| Information disclosure via verbose errors                        | Any                                | Normalised error envelope, no stack traces (`SEC-DATA-004`)                               |
+| Denial of service via auth endpoint abuse                        | Availability                       | Rate limiting (`SEC-NET-003`)                                                             |
+| Elevation of privilege via role/tenant confusion                 | All modules                        | RBAC guard chain, `07-RBAC-MATRIX.md` as enforced spec (`SEC-AUTHZ-*`)                    |
+| Forged payment confirmation                                      | Billing integrity                  | Server never trusts client payment callback; webhook signature verification (`SEC-PAY-*`) |
+| Malicious file upload                                            | Server/storage                     | MIME+extension allow-list, size cap, no public bucket (`SEC-FILE-*`)                      |
 
 ## 3. Authentication (`SEC-AUTHN`)
 

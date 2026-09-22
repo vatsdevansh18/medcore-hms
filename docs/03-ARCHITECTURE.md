@@ -87,7 +87,7 @@ Cross-cutting concerns are implemented once and applied globally:
 - **Pipes:** global `ValidationPipe` with `class-validator`/`class-transformer` DTOs, whitelist + forbid-non-whitelisted enabled (extra fields in a request body are rejected, not silently dropped or accepted).
 - **Filters:** a global exception filter normalises every thrown error (including Prisma errors) into the standard error envelope, stripping internals.
 
-Each module exposes a thin controller, a service holding business rules, and — where the module owns tenant-scoped models — a repository that is the *only* code path allowed to call Prisma for those models (this is what makes `FR-TENANT-002` enforceable by review, not just convention).
+Each module exposes a thin controller, a service holding business rules, and — where the module owns tenant-scoped models — a repository that is the _only_ code path allowed to call Prisma for those models (this is what makes `FR-TENANT-002` enforceable by review, not just convention).
 
 ## 4. Database Architecture
 
@@ -204,7 +204,7 @@ ALTER TABLE "Appointment" ADD CONSTRAINT no_patient_overlap
   ) WHERE (status NOT IN ('CANCELLED', 'NO_SHOW'));
 ```
 
-This makes double-booking impossible at the storage engine level, independent of how many API instances are running concurrently. The service layer still performs an availability pre-check (reads `DoctorAvailability` minus existing bookings) so the *common* case returns a friendly `SLOT_UNAVAILABLE` error before hitting the database — the constraint is the correctness guarantee; the pre-check is the UX nicety. The concurrency test in `10-TESTING-STRATEGY.md` fires two simultaneous booking requests at the same slot and asserts exactly one `201` and one `409 SLOT_UNAVAILABLE`.
+This makes double-booking impossible at the storage engine level, independent of how many API instances are running concurrently. The service layer still performs an availability pre-check (reads `DoctorAvailability` minus existing bookings) so the _common_ case returns a friendly `SLOT_UNAVAILABLE` error before hitting the database — the constraint is the correctness guarantee; the pre-check is the UX nicety. The concurrency test in `10-TESTING-STRATEGY.md` fires two simultaneous booking requests at the same slot and asserts exactly one `201` and one `409 SLOT_UNAVAILABLE`.
 
 ## 9. Payment Architecture
 
@@ -285,14 +285,14 @@ Blue-green style deploy on EC2: new container set starts, passes `/health/ready`
 
 BullMQ queues, one per concern, each with its own concurrency and retry policy:
 
-| Queue | Trigger | Retry policy | Idempotency key |
-|---|---|---|---|
-| `email` | Notification event | 3 attempts, exponential backoff | `notificationId` + channel |
-| `sms` | Notification event | 3 attempts, exponential backoff | `notificationId` + channel |
-| `pdf-generate` | Prescription/report finalised | 2 attempts | `sourceEntityId` |
-| `appointment-reminder` | Scheduled (repeatable job per appointment) | 3 attempts | `appointmentId` + reminder window |
-| `medicine-expiry-scan` | Cron, nightly | N/A (idempotent scan) | date-scoped |
-| `webhook-processing` | Payment webhook received | handled synchronously in the request, not queued — signature check must gate the HTTP response itself | `providerEventId` |
+| Queue                  | Trigger                                    | Retry policy                                                                                          | Idempotency key                   |
+| ---------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `email`                | Notification event                         | 3 attempts, exponential backoff                                                                       | `notificationId` + channel        |
+| `sms`                  | Notification event                         | 3 attempts, exponential backoff                                                                       | `notificationId` + channel        |
+| `pdf-generate`         | Prescription/report finalised              | 2 attempts                                                                                            | `sourceEntityId`                  |
+| `appointment-reminder` | Scheduled (repeatable job per appointment) | 3 attempts                                                                                            | `appointmentId` + reminder window |
+| `medicine-expiry-scan` | Cron, nightly                              | N/A (idempotent scan)                                                                                 | date-scoped                       |
+| `webhook-processing`   | Payment webhook received                   | handled synchronously in the request, not queued — signature check must gate the HTTP response itself | `providerEventId`                 |
 
 Failed jobs after max attempts move to a dead-letter state inspectable via Bull Board (dev/staging only, never exposed in production without auth).
 
@@ -322,4 +322,4 @@ GitHub Actions, matching the brief's pipeline exactly:
 
 ## 16. Architecture Decision Cross-References
 
-Every non-obvious choice above (monolith vs. microservices, row-level tenancy, exclusion-constraint concurrency, app-level field encryption) is recorded with rejected alternatives in `11-DECISIONS.md`. This document states *what* the architecture is; that one states *why*, so the two never drift silently.
+Every non-obvious choice above (monolith vs. microservices, row-level tenancy, exclusion-constraint concurrency, app-level field encryption) is recorded with rejected alternatives in `11-DECISIONS.md`. This document states _what_ the architecture is; that one states _why_, so the two never drift silently.

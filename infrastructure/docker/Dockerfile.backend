@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+WORKDIR /workspace
+
+# ---- deps: install once, reused by both the dev and prod build stages ----
+FROM base AS deps
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/types/package.json packages/types/package.json
+COPY packages/config/package.json packages/config/package.json
+COPY apps/backend/package.json apps/backend/package.json
+RUN pnpm install --frozen-lockfile --filter=@medcore/backend...
+
+# ---- dev: used by docker-compose.yml for local development (hot reload via bind mount) ----
+FROM deps AS dev
+COPY packages/types packages/types
+COPY packages/config packages/config
+COPY apps/backend apps/backend
+# @medcore/types is consumed as compiled JS (see packages/types/package.json) — build it
+# once into the image; apps/backend's own source is bind-mounted for hot reload instead.
+RUN pnpm --filter=@medcore/types run build
+EXPOSE 3001
+CMD ["pnpm", "--filter=@medcore/backend", "run", "dev"]
+
+# ---- build: compiles the production bundle ----
+FROM deps AS build
+COPY packages/types packages/types
+COPY packages/config packages/config
+COPY apps/backend apps/backend
+RUN pnpm -r --if-present run build
+
+# ---- runtime: minimal production image (used from Phase 16 onward) ----
+FROM base AS runtime
+ENV NODE_ENV=production
+COPY --from=build /workspace/apps/backend/dist ./apps/backend/dist
+COPY --from=build /workspace/apps/backend/package.json ./apps/backend/package.json
+COPY --from=build /workspace/node_modules ./node_modules
+COPY --from=build /workspace/apps/backend/node_modules ./apps/backend/node_modules
+COPY --from=build /workspace/packages ./packages
+EXPOSE 3001
+CMD ["node", "apps/backend/dist/main.js"]

@@ -16,38 +16,47 @@
 ## 2. Standard Response Envelopes
 
 **Success:**
+
 ```json
-{ "success": true, "data": { }, "message": "OK" }
+{ "success": true, "data": {}, "message": "OK" }
 ```
 
 **Error:**
+
 ```json
-{ "success": false, "error": { "code": "SLOT_UNAVAILABLE", "message": "This slot was just booked by another patient." } }
+{
+  "success": false,
+  "error": {
+    "code": "SLOT_UNAVAILABLE",
+    "message": "This slot was just booked by another patient."
+  }
+}
 ```
 
 **Paginated list:**
+
 ```json
-{ "success": true, "data": [ ], "meta": { "page": 1, "limit": 20, "total": 348, "totalPages": 18 } }
+{ "success": true, "data": [], "meta": { "page": 1, "limit": 20, "total": 348, "totalPages": 18 } }
 ```
 
 Every thrown exception in the backend is normalised into the error envelope by a global exception filter — no raw stack traces, Prisma error text, or framework default error bodies ever reach the client (`02-SRS.md` §4).
 
 ## 3. Standard Error Codes (Non-Exhaustive Core Set)
 
-| Code | HTTP Status | Meaning |
-|---|---|---|
-| `VALIDATION_ERROR` | 400 | DTO validation failed; `error.details` carries field-level messages |
-| `UNAUTHENTICATED` | 401 | Missing/invalid/expired access token |
-| `INVALID_REFRESH_TOKEN` | 401 | Refresh token invalid, expired, or reused after rotation |
-| `FORBIDDEN_ROLE` | 403 | Caller's role is not permitted for this action |
-| `TENANT_MISMATCH` | 403 | Resource belongs to a different hospital than the caller's scope |
-| `NOT_FOUND` | 404 | Resource does not exist within the caller's visible scope (used identically whether the resource truly doesn't exist or exists in another tenant — see §6) |
-| `SLOT_UNAVAILABLE` | 409 | Appointment slot conflict (pre-check or DB exclusion constraint) |
-| `MEDICINE_EXPIRED` | 422 | Attempted dispense from an expired/quarantined batch |
-| `INVOICE_LOCKED` | 409 | Attempted edit of a finalised invoice's line items |
-| `WEBHOOK_SIGNATURE_INVALID` | 400 | Payment webhook signature verification failed |
-| `RATE_LIMITED` | 429 | Throttle threshold exceeded |
-| `INTERNAL_ERROR` | 500 | Unhandled server fault (logged to Sentry with correlation ID) |
+| Code                        | HTTP Status | Meaning                                                                                                                                                    |
+| --------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VALIDATION_ERROR`          | 400         | DTO validation failed; `error.details` carries field-level messages                                                                                        |
+| `UNAUTHENTICATED`           | 401         | Missing/invalid/expired access token                                                                                                                       |
+| `INVALID_REFRESH_TOKEN`     | 401         | Refresh token invalid, expired, or reused after rotation                                                                                                   |
+| `FORBIDDEN_ROLE`            | 403         | Caller's role is not permitted for this action                                                                                                             |
+| `TENANT_MISMATCH`           | 403         | Resource belongs to a different hospital than the caller's scope                                                                                           |
+| `NOT_FOUND`                 | 404         | Resource does not exist within the caller's visible scope (used identically whether the resource truly doesn't exist or exists in another tenant — see §6) |
+| `SLOT_UNAVAILABLE`          | 409         | Appointment slot conflict (pre-check or DB exclusion constraint)                                                                                           |
+| `MEDICINE_EXPIRED`          | 422         | Attempted dispense from an expired/quarantined batch                                                                                                       |
+| `INVOICE_LOCKED`            | 409         | Attempted edit of a finalised invoice's line items                                                                                                         |
+| `WEBHOOK_SIGNATURE_INVALID` | 400         | Payment webhook signature verification failed                                                                                                              |
+| `RATE_LIMITED`              | 429         | Throttle threshold exceeded                                                                                                                                |
+| `INTERNAL_ERROR`            | 500         | Unhandled server fault (logged to Sentry with correlation ID)                                                                                              |
 
 ## 4. Core Endpoints by Module
 
@@ -55,124 +64,124 @@ Full parameter/DTO detail lives in Swagger (generated in Phase 3+ from `@nestjs/
 
 ### 4.1 Auth
 
-| Method + Path | Auth | FR | Notes |
-|---|---|---|---|
-| `POST /auth/register` | Public | FR-AUTH-001 | Creates `PENDING` account, sends email OTP |
-| `POST /auth/verify-email` | Public (token) | FR-AUTH-001 | 6-digit OTP, 10 min TTL |
-| `POST /auth/verify-phone` | Authenticated | FR-AUTH-005 | Twilio SMS OTP |
-| `POST /auth/login` | Public | FR-AUTH-002 | Returns access token + sets refresh cookie |
-| `POST /auth/refresh` | Refresh cookie | FR-AUTH-003 | Rotates refresh token |
-| `POST /auth/forgot-password` | Public | FR-AUTH-004 | Always 200, regardless of email existence (no user enumeration) |
-| `POST /auth/reset-password` | Public (token) | FR-AUTH-004 | Single-use, 60 min TTL |
-| `POST /auth/logout` | Authenticated | FR-AUTH-002 | Revokes current device's refresh token |
-| `GET /auth/sessions` | Authenticated | FR-AUTH-006 | Lists active device sessions |
-| `DELETE /auth/sessions/:id` | Authenticated | FR-AUTH-006 | Revoke one or all (`:id = all`) |
-| `GET /auth/me` | Authenticated | FR-AUTH-007 | Profile + role + permission set |
+| Method + Path                | Auth           | FR          | Notes                                                           |
+| ---------------------------- | -------------- | ----------- | --------------------------------------------------------------- |
+| `POST /auth/register`        | Public         | FR-AUTH-001 | Creates `PENDING` account, sends email OTP                      |
+| `POST /auth/verify-email`    | Public (token) | FR-AUTH-001 | 6-digit OTP, 10 min TTL                                         |
+| `POST /auth/verify-phone`    | Authenticated  | FR-AUTH-005 | Twilio SMS OTP                                                  |
+| `POST /auth/login`           | Public         | FR-AUTH-002 | Returns access token + sets refresh cookie                      |
+| `POST /auth/refresh`         | Refresh cookie | FR-AUTH-003 | Rotates refresh token                                           |
+| `POST /auth/forgot-password` | Public         | FR-AUTH-004 | Always 200, regardless of email existence (no user enumeration) |
+| `POST /auth/reset-password`  | Public (token) | FR-AUTH-004 | Single-use, 60 min TTL                                          |
+| `POST /auth/logout`          | Authenticated  | FR-AUTH-002 | Revokes current device's refresh token                          |
+| `GET /auth/sessions`         | Authenticated  | FR-AUTH-006 | Lists active device sessions                                    |
+| `DELETE /auth/sessions/:id`  | Authenticated  | FR-AUTH-006 | Revoke one or all (`:id = all`)                                 |
+| `GET /auth/me`               | Authenticated  | FR-AUTH-007 | Profile + role + permission set                                 |
 
 ### 4.2 Hospitals, Departments, Users
 
-| Method + Path | Auth (RBAC ref) | FR |
-|---|---|---|
-| `POST /hospitals` | Super Admin | FR-HOSP-001 |
-| `PATCH /hospitals/:id/verify` | Super Admin | FR-HOSP-001 |
-| `GET /hospitals` | Super Admin | §3.1 |
-| `GET /hospitals/:id` | Super Admin, own Hospital Admin | §3.1 |
-| `GET /hospitals/:id/departments` | Hospital staff (own) | FR-HOSP-002 |
-| `POST /hospitals/:id/departments` | Hospital Admin (own) | FR-HOSP-002 |
-| `POST /users` (staff provisioning) | Hospital Admin (own) | FR-HOSP-002 |
-| `GET /users/:id` | Self or Admin (own hospital) | §3.2 |
+| Method + Path                      | Auth (RBAC ref)                 | FR          |
+| ---------------------------------- | ------------------------------- | ----------- |
+| `POST /hospitals`                  | Super Admin                     | FR-HOSP-001 |
+| `PATCH /hospitals/:id/verify`      | Super Admin                     | FR-HOSP-001 |
+| `GET /hospitals`                   | Super Admin                     | §3.1        |
+| `GET /hospitals/:id`               | Super Admin, own Hospital Admin | §3.1        |
+| `GET /hospitals/:id/departments`   | Hospital staff (own)            | FR-HOSP-002 |
+| `POST /hospitals/:id/departments`  | Hospital Admin (own)            | FR-HOSP-002 |
+| `POST /users` (staff provisioning) | Hospital Admin (own)            | FR-HOSP-002 |
+| `GET /users/:id`                   | Self or Admin (own hospital)    | §3.2        |
 
 ### 4.3 Doctors & Availability
 
-| Method + Path | Auth | FR |
-|---|---|---|
-| `GET /doctors?hospitalId=&specialisation=` | Any authenticated (own hospital) | §3.3 |
-| `POST /doctors` (profile creation) | Hospital Admin (own) | FR-HOSP-003 |
-| `GET /doctors/:id/availability` | Any authenticated (own hospital) | FR-APPT-001/002 |
-| `PUT /doctors/:id/availability` | Doctor (self) | FR-APPT-001 |
-| `POST /doctors/:id/availability-exceptions` | Doctor (self) | FR-APPT-001 |
+| Method + Path                               | Auth                             | FR              |
+| ------------------------------------------- | -------------------------------- | --------------- |
+| `GET /doctors?hospitalId=&specialisation=`  | Any authenticated (own hospital) | §3.3            |
+| `POST /doctors` (profile creation)          | Hospital Admin (own)             | FR-HOSP-003     |
+| `GET /doctors/:id/availability`             | Any authenticated (own hospital) | FR-APPT-001/002 |
+| `PUT /doctors/:id/availability`             | Doctor (self)                    | FR-APPT-001     |
+| `POST /doctors/:id/availability-exceptions` | Doctor (self)                    | FR-APPT-001     |
 
 ### 4.4 Appointments
 
-| Method + Path | Auth | FR |
-|---|---|---|
-| `POST /appointments` | Patient (self) / Receptionist (own hospital) | FR-APPT-002/003/004 |
-| `GET /appointments` | Role-scoped list (§3.3) | FR-APPT-005 |
-| `GET /appointments/:id` | Role-scoped | FR-APPT-005 |
-| `PATCH /appointments/:id/status` | Doctor / Receptionist (own) | FR-APPT-005 |
-| `POST /appointments/emergency` | Doctor / Receptionist | FR-APPT-006 |
+| Method + Path                    | Auth                                         | FR                  |
+| -------------------------------- | -------------------------------------------- | ------------------- |
+| `POST /appointments`             | Patient (self) / Receptionist (own hospital) | FR-APPT-002/003/004 |
+| `GET /appointments`              | Role-scoped list (§3.3)                      | FR-APPT-005         |
+| `GET /appointments/:id`          | Role-scoped                                  | FR-APPT-005         |
+| `PATCH /appointments/:id/status` | Doctor / Receptionist (own)                  | FR-APPT-005         |
+| `POST /appointments/emergency`   | Doctor / Receptionist                        | FR-APPT-006         |
 
 ### 4.5 EMR
 
-| Method + Path | Auth | FR |
-|---|---|---|
-| `POST /medical-records` | Doctor | FR-EMR-001 |
-| `GET /medical-records/:patientId` | Doctor / Nurse (own hospital) / Patient (own) | FR-EMR-007 |
-| `POST /medical-records/:id/addenda` | Doctor / Nurse (own hospital) | FR-EMR-002 |
-| `POST /medical-records/:id/vitals` | Doctor / Nurse | FR-EMR-003 |
-| `POST /medical-records/:id/attachments` | Doctor / Nurse / Lab Tech (lab reports) | FR-EMR-006 |
+| Method + Path                           | Auth                                          | FR         |
+| --------------------------------------- | --------------------------------------------- | ---------- |
+| `POST /medical-records`                 | Doctor                                        | FR-EMR-001 |
+| `GET /medical-records/:patientId`       | Doctor / Nurse (own hospital) / Patient (own) | FR-EMR-007 |
+| `POST /medical-records/:id/addenda`     | Doctor / Nurse (own hospital)                 | FR-EMR-002 |
+| `POST /medical-records/:id/vitals`      | Doctor / Nurse                                | FR-EMR-003 |
+| `POST /medical-records/:id/attachments` | Doctor / Nurse / Lab Tech (lab reports)       | FR-EMR-006 |
 
 ### 4.6 Prescriptions
 
-| Method + Path | Auth | FR |
-|---|---|---|
-| `POST /prescriptions` | Doctor | FR-RX-001/002 |
-| `GET /prescriptions/:id` | Doctor / Pharmacist (own) / Patient (own) | FR-RX-001 |
-| `GET /prescriptions/:id/pdf` | Doctor / Patient (own) | FR-RX-003 |
+| Method + Path                | Auth                                      | FR            |
+| ---------------------------- | ----------------------------------------- | ------------- |
+| `POST /prescriptions`        | Doctor                                    | FR-RX-001/002 |
+| `GET /prescriptions/:id`     | Doctor / Pharmacist (own) / Patient (own) | FR-RX-001     |
+| `GET /prescriptions/:id/pdf` | Doctor / Patient (own)                    | FR-RX-003     |
 
 ### 4.7 Laboratory
 
-| Method + Path | Auth | FR |
-|---|---|---|
-| `POST /lab-orders` | Doctor | FR-LAB-001 |
-| `PATCH /lab-orders/:id/items/:itemId/status` | Receptionist (collect) / Lab Tech | FR-LAB-002 |
-| `PATCH /lab-orders/:id/items/:itemId/result` | Lab Technician | FR-LAB-003 |
-| `PATCH /lab-orders/:id/items/:itemId/approve` | Lab Technician (different from enterer) | FR-LAB-004 |
-| `GET /lab-orders/:id` | Doctor / Lab Tech (own) / Patient (own, post-approval) | FR-LAB-004/005 |
+| Method + Path                                 | Auth                                                   | FR             |
+| --------------------------------------------- | ------------------------------------------------------ | -------------- |
+| `POST /lab-orders`                            | Doctor                                                 | FR-LAB-001     |
+| `PATCH /lab-orders/:id/items/:itemId/status`  | Receptionist (collect) / Lab Tech                      | FR-LAB-002     |
+| `PATCH /lab-orders/:id/items/:itemId/result`  | Lab Technician                                         | FR-LAB-003     |
+| `PATCH /lab-orders/:id/items/:itemId/approve` | Lab Technician (different from enterer)                | FR-LAB-004     |
+| `GET /lab-orders/:id`                         | Doctor / Lab Tech (own) / Patient (own, post-approval) | FR-LAB-004/005 |
 
 ### 4.8 Pharmacy
 
-| Method + Path | Auth | FR |
-|---|---|---|
-| `GET /medicines?search=&hospitalId=` | Pharmacist / Doctor (own) | FR-PHARM-001 |
-| `POST /medicines/:id/batches` | Pharmacist (own) | FR-PHARM-001 |
-| `POST /prescriptions/:id/dispense` | Pharmacist (own) | FR-PHARM-002/003 |
-| `GET /medicines/low-stock` | Pharmacist / Hospital Admin (own) | FR-PHARM-004 |
+| Method + Path                        | Auth                              | FR               |
+| ------------------------------------ | --------------------------------- | ---------------- |
+| `GET /medicines?search=&hospitalId=` | Pharmacist / Doctor (own)         | FR-PHARM-001     |
+| `POST /medicines/:id/batches`        | Pharmacist (own)                  | FR-PHARM-001     |
+| `POST /prescriptions/:id/dispense`   | Pharmacist (own)                  | FR-PHARM-002/003 |
+| `GET /medicines/low-stock`           | Pharmacist / Hospital Admin (own) | FR-PHARM-004     |
 
 ### 4.9 Billing & Payments
 
-| Method + Path | Auth | FR |
-|---|---|---|
-| `POST /invoices` | Receptionist / Accountant (own) | FR-BILL-001 |
-| `POST /invoices/:id/items` | Receptionist / Accountant / system-internal (own) | FR-BILL-001 |
-| `PATCH /invoices/:id/finalize` | Receptionist / Accountant (own) | FR-BILL-002 |
-| `GET /invoices/:id` | Receptionist / Accountant (own) / Patient (own) | §3.8 |
-| `POST /invoices/:id/checkout-session` | Patient (self) | FR-BILL-004 |
-| `POST /payments/webhook/stripe` | Provider (signature-verified, no role) | FR-BILL-004/005 |
-| `POST /payments/webhook/razorpay` | Provider (signature-verified, no role) | FR-BILL-004/005 |
-| `POST /invoices/:id/cash-payment` | Receptionist / Accountant (own) | FR-BILL-004 |
+| Method + Path                         | Auth                                              | FR              |
+| ------------------------------------- | ------------------------------------------------- | --------------- |
+| `POST /invoices`                      | Receptionist / Accountant (own)                   | FR-BILL-001     |
+| `POST /invoices/:id/items`            | Receptionist / Accountant / system-internal (own) | FR-BILL-001     |
+| `PATCH /invoices/:id/finalize`        | Receptionist / Accountant (own)                   | FR-BILL-002     |
+| `GET /invoices/:id`                   | Receptionist / Accountant (own) / Patient (own)   | §3.8            |
+| `POST /invoices/:id/checkout-session` | Patient (self)                                    | FR-BILL-004     |
+| `POST /payments/webhook/stripe`       | Provider (signature-verified, no role)            | FR-BILL-004/005 |
+| `POST /payments/webhook/razorpay`     | Provider (signature-verified, no role)            | FR-BILL-004/005 |
+| `POST /invoices/:id/cash-payment`     | Receptionist / Accountant (own)                   | FR-BILL-004     |
 
 ### 4.10 Notifications
 
-| Method + Path | Auth | FR |
-|---|---|---|
-| `GET /notifications/me` | Any authenticated | FR-NOTIF-003 |
-| `PATCH /notifications/:id/read` | Owner only | FR-NOTIF-003 |
+| Method + Path                                         | Auth                                 | FR           |
+| ----------------------------------------------------- | ------------------------------------ | ------------ |
+| `GET /notifications/me`                               | Any authenticated                    | FR-NOTIF-003 |
+| `PATCH /notifications/:id/read`                       | Owner only                           | FR-NOTIF-003 |
 | WebSocket `notifications` namespace, room `user:{id}` | Authenticated socket handshake (JWT) | FR-NOTIF-003 |
 
 ### 4.11 Analytics & Search
 
-| Method + Path | Auth | FR |
-|---|---|---|
-| `GET /analytics/revenue?from=&to=` | Admin / Accountant (own) | FR-ANALYTICS-001 |
-| `GET /analytics/appointments?from=&to=` | Admin / Doctor (own) | FR-ANALYTICS-001 |
-| `GET /search?q=&scope=patients\|doctors\|medicines` | Role-appropriate (own hospital) | FR-SEARCH-001 |
+| Method + Path                                       | Auth                            | FR               |
+| --------------------------------------------------- | ------------------------------- | ---------------- |
+| `GET /analytics/revenue?from=&to=`                  | Admin / Accountant (own)        | FR-ANALYTICS-001 |
+| `GET /analytics/appointments?from=&to=`             | Admin / Doctor (own)            | FR-ANALYTICS-001 |
+| `GET /search?q=&scope=patients\|doctors\|medicines` | Role-appropriate (own hospital) | FR-SEARCH-001    |
 
 ### 4.12 Health
 
-| Method + Path | Auth | NFR |
-|---|---|---|
-| `GET /health` | Public | NFR-AVAIL-001 |
+| Method + Path       | Auth   | NFR           |
+| ------------------- | ------ | ------------- |
+| `GET /health`       | Public | NFR-AVAIL-001 |
 | `GET /health/ready` | Public | NFR-AVAIL-001 |
 
 ## 5. DTO & Validation Rules

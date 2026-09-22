@@ -31,23 +31,23 @@ The platform serves two audiences:
 
 ### 3.1 User Roles
 
-| Role | Primary Responsibilities |
-|---|---|
-| Super Admin | Platform-wide management, hospital onboarding/verification, cross-tenant analytics. Not scoped to any single hospital. |
-| Hospital Admin | Configures their hospital: departments, staff, rooms/beds, hospital-level analytics and billing configuration. |
-| Doctor | Patient encounters, EMR authoring, prescriptions, lab/radiology orders, availability calendar management. |
-| Nurse | Vitals recording, medication administration notes, ward/bed management. |
-| Receptionist | Patient registration, appointment scheduling, draft invoice creation. |
-| Lab Technician | Receives test orders, records/uploads results, drives the sample-to-report workflow. |
-| Pharmacist | Verifies prescriptions, dispenses medicine against batches, manages inventory and expiry. |
-| Accountant | Financial reports, invoice finalisation, payment reconciliation, insurance claim tracking. |
-| Patient | Views own records, books appointments, downloads reports/prescriptions, pays invoices. |
+| Role           | Primary Responsibilities                                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Super Admin    | Platform-wide management, hospital onboarding/verification, cross-tenant analytics. Not scoped to any single hospital. |
+| Hospital Admin | Configures their hospital: departments, staff, rooms/beds, hospital-level analytics and billing configuration.         |
+| Doctor         | Patient encounters, EMR authoring, prescriptions, lab/radiology orders, availability calendar management.              |
+| Nurse          | Vitals recording, medication administration notes, ward/bed management.                                                |
+| Receptionist   | Patient registration, appointment scheduling, draft invoice creation.                                                  |
+| Lab Technician | Receives test orders, records/uploads results, drives the sample-to-report workflow.                                   |
+| Pharmacist     | Verifies prescriptions, dispenses medicine against batches, manages inventory and expiry.                              |
+| Accountant     | Financial reports, invoice finalisation, payment reconciliation, insurance claim tracking.                             |
+| Patient        | Views own records, books appointments, downloads reports/prescriptions, pays invoices.                                 |
 
 Each role's UI and API access are treated as distinct products sharing a design system — not one dashboard with re-labelled widgets (see `04-UI-UX.md` §Role-Specific UX).
 
 ## 4. Goals
 
-- Deliver a small number of **complete, secure, tested workflows** end-to-end rather than many shallow ones (brief §"A Note from the Project Coordinator": *"Prioritise depth over breadth"*).
+- Deliver a small number of **complete, secure, tested workflows** end-to-end rather than many shallow ones (brief §"A Note from the Project Coordinator": _"Prioritise depth over breadth"_).
 - Demonstrate defensible multi-tenant data isolation, with automated tests that fail the build on any regression.
 - Demonstrate correct handling of the two hardest correctness problems in this domain: **concurrent appointment booking** and **payment webhook trust boundaries**.
 - Produce a codebase and documentation set that reads as professional engineering work to a technical reviewer, independent of the academic grading rubric.
@@ -109,30 +109,30 @@ The product is successful when a reviewer can, using seeded demo data and role-s
 
 ## 9. MVP vs. Later Enhancements
 
-| In MVP | Deferred (Phase 2+, documented, not silently dropped) |
-|---|---|
+| In MVP                                               | Deferred (Phase 2+, documented, not silently dropped)                           |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Row-level multi-tenancy with automatic query scoping | Schema-per-tenant or DB-per-tenant migration path (documented as future option) |
-| Stripe + Razorpay test-mode payments, cash | Live payment credentials, multi-currency |
-| Email + SMS + in-app notifications | Push notifications to native mobile apps |
-| Bed/room occupancy tracking for ward UX + admin KPI | Full inpatient (IPD) clinical and billing workflow |
-| Single role per user | Multi-role users, delegated/impersonation access |
-| Reference-range flagging for lab results | Full LOINC-coded lab catalog integration |
-| Data model for insurance claims | TPA adjudication workflow and payer integrations |
+| Stripe + Razorpay test-mode payments, cash           | Live payment credentials, multi-currency                                        |
+| Email + SMS + in-app notifications                   | Push notifications to native mobile apps                                        |
+| Bed/room occupancy tracking for ward UX + admin KPI  | Full inpatient (IPD) clinical and billing workflow                              |
+| Single role per user                                 | Multi-role users, delegated/impersonation access                                |
+| Reference-range flagging for lab results             | Full LOINC-coded lab catalog integration                                        |
+| Data model for insurance claims                      | TPA adjudication workflow and payer integrations                                |
 
 ## 10. Assumptions & Constraints
 
-- The internship brief's 4-week calendar is treated as illustrative of *sequencing*, not as a hard deadline governing scope — the master build prompt supersedes it with a phase-gated methodology with no fixed calendar. This is a documented deviation (`11-DECISIONS.md` D-001).
+- The internship brief's 4-week calendar is treated as illustrative of _sequencing_, not as a hard deadline governing scope — the master build prompt supersedes it with a phase-gated methodology with no fixed calendar. This is a documented deviation (`11-DECISIONS.md` D-001).
 - All third-party integrations (Stripe, Razorpay, Twilio, Resend, Cloudinary, Sentry, AWS) run in test/sandbox mode throughout development; no real patient, payment, or personal data is ever used (brief §13, §15).
 - The developer is solo; architecture favours boring, well-documented technology choices over novel ones, per the brief's own technology stack mandate.
 
 ## 11. Requirements Classification
 
-| Class | Meaning | Examples |
-|---|---|---|
-| **Mandatory** | Explicitly required by the brief; failure to implement is a scope gap. | Auth+RBAC, tenancy isolation, appointment concurrency control, EMR, prescriptions, lab workflow, pharmacy FIFO/expiry, billing with verified webhooks, notifications, patient portal, Docker+CI, Swagger, ER diagram, testing pyramid. |
-| **Recommended** | Strongly implied by the brief's hints and evaluation rubric but with implementation latitude. | Redis-cached availability, BullMQ job architecture, Sentry from day one, audit logging depth, column-level encryption approach. |
-| **Optional** | Nice-to-have, improves the demo but not separately graded. | Cloudinary image optimisation, insurance claim data model, admission/bed tracking. |
-| **Out of scope** | Explicitly excluded. | Video consultation, DICOM viewer, AI diagnostics, native mobile, HL7/FHIR. |
+| Class            | Meaning                                                                                       | Examples                                                                                                                                                                                                                               |
+| ---------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mandatory**    | Explicitly required by the brief; failure to implement is a scope gap.                        | Auth+RBAC, tenancy isolation, appointment concurrency control, EMR, prescriptions, lab workflow, pharmacy FIFO/expiry, billing with verified webhooks, notifications, patient portal, Docker+CI, Swagger, ER diagram, testing pyramid. |
+| **Recommended**  | Strongly implied by the brief's hints and evaluation rubric but with implementation latitude. | Redis-cached availability, BullMQ job architecture, Sentry from day one, audit logging depth, column-level encryption approach.                                                                                                        |
+| **Optional**     | Nice-to-have, improves the demo but not separately graded.                                    | Cloudinary image optimisation, insurance claim data model, admission/bed tracking.                                                                                                                                                     |
+| **Out of scope** | Explicitly excluded.                                                                          | Video consultation, DICOM viewer, AI diagnostics, native mobile, HL7/FHIR.                                                                                                                                                             |
 
 ## 12. Acceptance Criteria (Product-Level)
 

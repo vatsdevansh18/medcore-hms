@@ -14,20 +14,20 @@
 
 ## 2. Core Entity Relationships (Summary Table)
 
-| Entity | Relates To | Relationship |
-|---|---|---|
-| Hospital | User, Department, Room | One Hospital → Many |
-| User | Role (enum), Hospital | Many Users → One Hospital (nullable for Super Admin) |
-| DoctorProfile | User, Department, Appointment | One-to-One with User |
-| PatientProfile | User, Hospital | One-to-One with User (nullable User for guest-registered patients) |
-| Appointment | DoctorProfile, PatientProfile, Department | Many-to-One each |
-| MedicalRecord | Appointment, PatientProfile, DoctorProfile | One Appointment → One Record |
-| Prescription | MedicalRecord, Medicine | Many-to-Many via PrescriptionItem |
-| LabOrder | MedicalRecord, LabTest | One Record → Many Orders |
-| Invoice | Appointment, PatientProfile | One Appointment → One Invoice |
-| InvoiceItem | Invoice, (Lab/Pharmacy/Consult) | Many-to-One Invoice |
-| Notification | User, (linked entity) | Polymorphic recipient |
-| AuditLog | User, any entity | All write operations logged |
+| Entity         | Relates To                                 | Relationship                                                       |
+| -------------- | ------------------------------------------ | ------------------------------------------------------------------ |
+| Hospital       | User, Department, Room                     | One Hospital → Many                                                |
+| User           | Role (enum), Hospital                      | Many Users → One Hospital (nullable for Super Admin)               |
+| DoctorProfile  | User, Department, Appointment              | One-to-One with User                                               |
+| PatientProfile | User, Hospital                             | One-to-One with User (nullable User for guest-registered patients) |
+| Appointment    | DoctorProfile, PatientProfile, Department  | Many-to-One each                                                   |
+| MedicalRecord  | Appointment, PatientProfile, DoctorProfile | One Appointment → One Record                                       |
+| Prescription   | MedicalRecord, Medicine                    | Many-to-Many via PrescriptionItem                                  |
+| LabOrder       | MedicalRecord, LabTest                     | One Record → Many Orders                                           |
+| Invoice        | Appointment, PatientProfile                | One Appointment → One Invoice                                      |
+| InvoiceItem    | Invoice, (Lab/Pharmacy/Consult)            | Many-to-One Invoice                                                |
+| Notification   | User, (linked entity)                      | Polymorphic recipient                                              |
+| AuditLog       | User, any entity                           | All write operations logged                                        |
 
 ## 3. Entity Groups & Diagrams
 
