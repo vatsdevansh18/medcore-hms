@@ -238,3 +238,55 @@ Each entry: context, alternatives considered, decision, rationale, consequences.
 **Rationale:** Building only the row Phase 7 actually needs — rather than the full Pharmacy CRUD surface — keeps Phase 9 a meaningful, non-redundant phase gate and avoids a phase silently absorbing a later phase's whole scope just because the schema (`Medicine`/`MedicineBatch`, already fully modeled since Phase 2) makes it easy to. This mirrors the project's established pattern of a phase using an already-schema-ready model minimally (e.g. Phase 6 using `Appointment` without touching appointment status logic).
 
 **Consequences:** Phase 7's e2e tests seed `Medicine` rows directly via Prisma (no API to create one yet), the same pattern already used for entities whose write-side API doesn't exist yet at test-authoring time (e.g. `Department` in earlier phases' setup). Phase 9 must not assume `medicines/medicines.controller.ts` is new — it's extending an existing controller/module, not creating one.
+
+---
+
+## D-018 — `LabResult.structuredValues` restricted to exactly one entry per `LabOrderItem` (Phase 8)
+
+**Context:** `docs/06-DATABASE-DESIGN.md` §3.4's ER diagram shows `LabResult.structuredValues` as a JSON array of `{parameter, value, unit, flag}`, suggesting a single lab test could report several named parameters (e.g. a multi-analyte panel). But `LabTestReferenceRange` is keyed only by `labTestId` (plus gender/age band) — there is no `parameter` column, so a single `LabTest` can only carry one reference range family, not one per named parameter within it.
+
+**Alternatives considered:** (a) accept an arbitrary-length `values` array and range-check every entry against the same `labTestId`'s ranges regardless of its `parameter` name — silently correct only when the test happens to be single-parameter, silently wrong (misapplied range) the moment a real multi-analyte panel is entered; (b) add a `parameter` column to `LabTestReferenceRange` now to support true multi-analyte panels; (c) restrict `EnterLabResultDto.values` to exactly one entry, matching what the schema can actually range-check correctly.
+
+**Decision:** (c). Every seeded `LabTest` (Haemoglobin, Fasting Blood Sugar, Total Cholesterol, TSH, Platelet Count) is single-parameter, so this is not a scope loss against anything currently in the catalog.
+
+**Rationale:** (b) is a real schema change for a capability nothing in the current catalog or FR-LAB text asks for — adding it speculatively would be exactly the kind of unrequested scope CLAUDE.md's engineering rules warn against. (a) would ship a feature that is silently incorrect for the one case it claims to support (multi-parameter), which fails "no fake completion" harder than not supporting it at all.
+
+**Consequences:** A future multi-analyte panel (e.g. a CBC with 6+ components) needs a `parameter` column added to `LabTestReferenceRange` (and a migration) before `EnterLabResultDto.values` can safely be widened past one entry — tracked here so it isn't mistaken for an oversight when it comes up.
+
+---
+
+## D-019 — Lab report file reuses `LabResult.reportFileUrl` directly; `AttachmentOwnerType.LAB_RESULT` stays unused (Phase 8)
+
+**Context:** `docs/08-API-CONTRACT.md`'s Phase 6 EMR section noted that the Lab Technician's "lab reports only" attachment-upload access (`AttachmentOwnerType.LAB_RESULT`, present in the schema's enum since Phase 2) was "out of scope until Phase 8 wires up lab orders" — implying the generic `Attachment` model might be the intended mechanism. But `docs/06-DATABASE-DESIGN.md`'s explicit hybrid-design rationale for lab results describes a direct `reportFileUrl` field on `LabResult` itself ("structured parameter/value/unit/flag ... plus an optional `reportFileUrl` for a PDF/scan"), and the `Attachment` model has no `labResultId` foreign key at all (only `medicalRecordId`) — using it for lab reports would need its own schema change, not just a new service.
+
+**Alternatives considered:** (a) add a `labResultId` FK to `Attachment` and route lab report files through the generic attachment upload/download-url endpoints, actually wiring up `AttachmentOwnerType.LAB_RESULT`; (b) use `LabResult.reportFileUrl` directly as an S3 storage key, the same direct-field pattern already established for `Prescription.pdfUrl` and `DoctorProfile.signatureImageUrl` (Phase 7).
+
+**Decision:** (b). `PATCH /lab-orders/:id/items/:itemId/result` accepts an optional `reportFile` metadata object and returns a pre-signed PUT `uploadUrl` when present, storing the resulting key in `LabResult.reportFileUrl`; `GET /lab-orders/:id` returns a pre-signed GET `downloadUrl` computed from that key, never the raw key itself (SEC-FILE-003).
+
+**Rationale:** `LabResult.reportFileUrl` is the field the database design's own hybrid-result rationale actually describes, and reusing the Phase 7-established direct-storage-key pattern needs no schema change and no new generic-attachment plumbing. `AttachmentOwnerType.LAB_RESULT` was written speculatively before Phase 8 existed; the simpler, already-schema-correct approach won out.
+
+**Consequences:** `AttachmentOwnerType.LAB_RESULT` remains a defined-but-unused enum member — documented here so it reads as an intentional, considered choice rather than dead code left by oversight. If a future phase needs full `Attachment`-style metadata (uploader, MIME/size bookkeeping, multiple files per result) for lab reports specifically, that's the point to add the FK and revisit this decision, not before.
+
+---
+
+## D-020 — FR-LAB-005 notification trigger persists a real `Notification` row per recipient; multi-channel dispatch stays Phase 11 (Phase 8)
+
+**Context:** `docs/03-ARCHITECTURE.md` §7 names `LabResultApproved` as the worked example of a domain event flowing through the (Phase 11-built) in-process event bus → `NotificationDispatcher` → per-channel BullMQ queues → `EmailWorker`/`SmsWorker`/`PushWorker`. None of that infrastructure exists yet — Phase 11 is still ahead in the roadmap — but FR-LAB-005 ("Approval triggers a notification fan-out to both patient and doctor") is explicitly in Phase 8's scope.
+
+**Decision:** On approval, `LabService` writes a real `Notification` row (already a tenant-scoped, audited-adjacent model since Phase 2) directly for each recipient with a resolved `User` account (the ordering doctor always; the patient only if `PatientProfile.userId` is set — a front-desk-registered patient with no portal login has nothing to notify), `channels: [IN_APP]`. No BullMQ queue, event bus, or `NotificationDispatcher` is introduced this phase.
+
+**Rationale:** Same "real-but-partial" scoping precedent as Phase 5's `ReminderDeliveryStub` (`docs/phase-reviews/PHASE-5-REVIEW.md`): the trigger condition, its data, and the persisted row are all genuine and independently testable via a direct query, rather than a fabricated call that proves nothing. Building the full multi-channel dispatcher now would mean redoing it in Phase 11 against real email/SMS providers anyway — pure duplicated effort for a phase whose actual job is that infrastructure.
+
+**Consequences:** There is no `GET /notifications/me` endpoint yet (that's Phase 11 too), so Phase 8's e2e tests assert the `Notification` row via a direct Prisma query, not through an API response. Phase 11 should treat `LabService.notifyResultApproved` as the first of several call sites needing migration onto the real event-bus/dispatcher pattern, alongside wherever Phase 9–10 add their own trigger points.
+
+---
+
+## D-021 — `GET /lab-orders/:id` result-visibility gating interpreted per-item, not per-endpoint (Phase 8)
+
+**Context:** `docs/07-RBAC-MATRIX.md` §3.6's "View result" row gives DOCTOR/NURSE "own hospital, post-approval" and PATIENT "self only, post-approval" — read most literally, this could mean the entire `GET /lab-orders/:id` response 404s for those roles until every item is approved, which would leave the ordering doctor with no way to check an order's collection/processing progress at all.
+
+**Decision:** Order-level access (whether the endpoint returns `200` vs `404`) follows the broader "own hospital" (staff) / "self" (patient) tenancy rule, matching every other module's list/detail endpoints. Per-item **result payload** visibility is gated separately: LAB_TECHNICIAN sees a result at any status (their own QC workflow); DOCTOR/NURSE see it once the item reaches a terminal QC state, `APPROVED` **or** `REJECTED` (so they know to reorder a rejected test, not just silently wait); PATIENT sees it only once truly `APPROVED`. An item not yet visible to the caller still appears in the response with `result: null`, never omitted outright — so a doctor/patient can always see that an order exists and each item's lifecycle status.
+
+**Rationale:** The literal whole-endpoint reading would make it impossible for the ordering doctor to track an in-flight order at all, which nothing in `02-SRS.md`'s FR-LAB text asks for and would be a real workflow regression versus every other module. Gating the result payload specifically (not the order's existence/status) satisfies the matrix's actual intent — the *result* isn't visible pre-approval — without inventing an artificial blind spot. This is the same kind of documented literal-vs-practical interpretation call made for PATIENT's appointment-cancellation restriction in Phase 5.
+
+**Consequences:** RBAC/authorization e2e tests must assert both halves separately: that a non-approved item's `result` field is `null` for DOCTOR/NURSE/PATIENT (but populated for LAB_TECHNICIAN), and that the order itself is still visible (not a blanket `404`) to any "own hospital"/"self" caller regardless of approval state.

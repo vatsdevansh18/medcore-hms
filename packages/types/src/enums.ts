@@ -110,6 +110,22 @@ export type LabOrderItemStatus = (typeof LabOrderItemStatus)[keyof typeof LabOrd
 export const LabOrderPriority = { ROUTINE: "ROUTINE", URGENT: "URGENT" } as const;
 export type LabOrderPriority = (typeof LabOrderPriority)[keyof typeof LabOrderPriority];
 
+/** Per-structured-value range-check outcome, FR-LAB-003. `NO_REFERENCE_RANGE`
+ * covers a LabTest with no matching LabTestReferenceRange row for the
+ * patient's gender/age — the value is stored but never flagged out-of-range,
+ * since there is nothing to compare it against. */
+export const LabResultFlag = {
+  NORMAL: "NORMAL",
+  LOW: "LOW",
+  HIGH: "HIGH",
+  NO_REFERENCE_RANGE: "NO_REFERENCE_RANGE",
+} as const;
+export type LabResultFlag = (typeof LabResultFlag)[keyof typeof LabResultFlag];
+
+/** FR-LAB-004 four-eyes approval decision. */
+export const LabResultDecision = { APPROVED: "APPROVED", REJECTED: "REJECTED" } as const;
+export type LabResultDecision = (typeof LabResultDecision)[keyof typeof LabResultDecision];
+
 export const InvoiceStatus = {
   DRAFT: "DRAFT",
   FINALIZED: "FINALIZED",
