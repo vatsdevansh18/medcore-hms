@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
 import { NestFactory } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
 import { ValidationPipe } from "@nestjs/common";
@@ -14,6 +15,9 @@ async function bootstrap() {
 
   // SEC-NET-001 — recommended security headers on every response.
   app.use(helmet());
+
+  // Needed to read the httpOnly refresh-token cookie (FR-AUTH-002/003).
+  app.use(cookieParser());
 
   // SEC-NET-002 — strict CORS allow-list, never a wildcard.
   app.enableCors({

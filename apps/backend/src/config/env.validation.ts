@@ -1,5 +1,15 @@
 import { plainToInstance } from "class-transformer";
-import { IsIn, IsInt, IsOptional, IsString, Max, Min, validateSync } from "class-validator";
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MinLength,
+  Min,
+  validateSync,
+} from "class-validator";
 
 /**
  * Validated environment configuration for the process.
@@ -31,6 +41,27 @@ export class EnvironmentVariables {
 
   @IsString()
   DATABASE_URL!: string;
+
+  @IsString()
+  REDIS_URL!: string;
+
+  // Minimum 256-bit secret per SEC-AUTHN-002 — 64 hex chars = 32 bytes.
+  @IsString()
+  @MinLength(32)
+  JWT_ACCESS_SECRET!: string;
+
+  @IsString()
+  @Matches(/^\d+[smhd]$/, { message: "JWT_ACCESS_TTL must look like 15m, 1h, 7d, etc." })
+  JWT_ACCESS_TTL: string = "15m";
+
+  @IsString()
+  @Matches(/^\d+[smhd]$/, { message: "JWT_REFRESH_TTL must look like 15m, 1h, 7d, etc." })
+  JWT_REFRESH_TTL: string = "7d";
+
+  @IsInt()
+  @Min(10)
+  @Max(15)
+  BCRYPT_COST_FACTOR: number = 12;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

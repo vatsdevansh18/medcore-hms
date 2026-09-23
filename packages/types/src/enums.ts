@@ -4,180 +4,189 @@
  * docs/06-DATABASE-DESIGN.md) — the Prisma schema is generated to match
  * this file's values, not the other way around, so this package stays
  * the single source of truth for the contract.
+ *
+ * Deliberately `as const` objects + derived union types, not real TS
+ * `enum` declarations. Two `enum` declarations with identical members are
+ * NOT mutually assignable in TypeScript — since Prisma generates its own
+ * enum types from schema.prisma independent of this file, using real
+ * enums here made every Prisma query result (typed with Prisma's own
+ * enums) fail to type-check against service/DTO signatures typed with
+ * these, even though the runtime string values are identical (found in
+ * Phase 3, see docs/phase-reviews/PHASE-3-REVIEW.md). This pattern's
+ * derived types are plain string-literal unions, which Prisma's enum
+ * members — themselves just branded string literals — are structurally
+ * assignable to without a cast. `Object.values(UserRole)` and
+ * `UserRole.DOCTOR` both still work exactly as they would with a real enum;
+ * only cross-file nominal assignability changes.
  */
 
 /** The nine platform roles — see docs/07-RBAC-MATRIX.md */
-export enum UserRole {
-  SUPER_ADMIN = "SUPER_ADMIN",
-  HOSPITAL_ADMIN = "HOSPITAL_ADMIN",
-  DOCTOR = "DOCTOR",
-  NURSE = "NURSE",
-  RECEPTIONIST = "RECEPTIONIST",
-  LAB_TECHNICIAN = "LAB_TECHNICIAN",
-  PHARMACIST = "PHARMACIST",
-  ACCOUNTANT = "ACCOUNTANT",
-  PATIENT = "PATIENT",
-}
+export const UserRole = {
+  SUPER_ADMIN: "SUPER_ADMIN",
+  HOSPITAL_ADMIN: "HOSPITAL_ADMIN",
+  DOCTOR: "DOCTOR",
+  NURSE: "NURSE",
+  RECEPTIONIST: "RECEPTIONIST",
+  LAB_TECHNICIAN: "LAB_TECHNICIAN",
+  PHARMACIST: "PHARMACIST",
+  ACCOUNTANT: "ACCOUNTANT",
+  PATIENT: "PATIENT",
+} as const;
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
-export enum UserStatus {
-  PENDING = "PENDING",
-  ACTIVE = "ACTIVE",
-  DISABLED = "DISABLED",
-}
+export const UserStatus = { PENDING: "PENDING", ACTIVE: "ACTIVE", DISABLED: "DISABLED" } as const;
+export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 
-export enum HospitalStatus {
-  PENDING_VERIFICATION = "PENDING_VERIFICATION",
-  ACTIVE = "ACTIVE",
-  SUSPENDED = "SUSPENDED",
-}
+export const HospitalStatus = {
+  PENDING_VERIFICATION: "PENDING_VERIFICATION",
+  ACTIVE: "ACTIVE",
+  SUSPENDED: "SUSPENDED",
+} as const;
+export type HospitalStatus = (typeof HospitalStatus)[keyof typeof HospitalStatus];
 
-export enum AppointmentStatus {
-  PENDING = "PENDING",
-  CONFIRMED = "CONFIRMED",
-  IN_PROGRESS = "IN_PROGRESS",
-  COMPLETED = "COMPLETED",
-  CANCELLED = "CANCELLED",
-  NO_SHOW = "NO_SHOW",
-}
+export const AppointmentStatus = {
+  PENDING: "PENDING",
+  CONFIRMED: "CONFIRMED",
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "COMPLETED",
+  CANCELLED: "CANCELLED",
+  NO_SHOW: "NO_SHOW",
+} as const;
+export type AppointmentStatus = (typeof AppointmentStatus)[keyof typeof AppointmentStatus];
 
-export enum AppointmentType {
-  REGULAR = "REGULAR",
-  EMERGENCY = "EMERGENCY",
-  FOLLOW_UP = "FOLLOW_UP",
-}
+export const AppointmentType = {
+  REGULAR: "REGULAR",
+  EMERGENCY: "EMERGENCY",
+  FOLLOW_UP: "FOLLOW_UP",
+} as const;
+export type AppointmentType = (typeof AppointmentType)[keyof typeof AppointmentType];
 
-export enum PrescriptionStatus {
-  ISSUED = "ISSUED",
-  PARTIALLY_DISPENSED = "PARTIALLY_DISPENSED",
-  DISPENSED = "DISPENSED",
-  CANCELLED = "CANCELLED",
-}
+export const PrescriptionStatus = {
+  ISSUED: "ISSUED",
+  PARTIALLY_DISPENSED: "PARTIALLY_DISPENSED",
+  DISPENSED: "DISPENSED",
+  CANCELLED: "CANCELLED",
+} as const;
+export type PrescriptionStatus = (typeof PrescriptionStatus)[keyof typeof PrescriptionStatus];
 
-export enum MedicineForm {
-  TABLET = "TABLET",
-  CAPSULE = "CAPSULE",
-  SYRUP = "SYRUP",
-  INJECTION = "INJECTION",
-  TOPICAL = "TOPICAL",
-  OTHER = "OTHER",
-}
+export const MedicineForm = {
+  TABLET: "TABLET",
+  CAPSULE: "CAPSULE",
+  SYRUP: "SYRUP",
+  INJECTION: "INJECTION",
+  TOPICAL: "TOPICAL",
+  OTHER: "OTHER",
+} as const;
+export type MedicineForm = (typeof MedicineForm)[keyof typeof MedicineForm];
 
-export enum PrescriptionFrequency {
-  OD = "OD",
-  BD = "BD",
-  TDS = "TDS",
-  QID = "QID",
-  SOS = "SOS",
-  OTHER = "OTHER",
-}
+export const PrescriptionFrequency = {
+  OD: "OD",
+  BD: "BD",
+  TDS: "TDS",
+  QID: "QID",
+  SOS: "SOS",
+  OTHER: "OTHER",
+} as const;
+export type PrescriptionFrequency =
+  (typeof PrescriptionFrequency)[keyof typeof PrescriptionFrequency];
 
-export enum MedicineBatchStatus {
-  ACTIVE = "ACTIVE",
-  QUARANTINED = "QUARANTINED",
-  DEPLETED = "DEPLETED",
-}
+export const MedicineBatchStatus = {
+  ACTIVE: "ACTIVE",
+  QUARANTINED: "QUARANTINED",
+  DEPLETED: "DEPLETED",
+} as const;
+export type MedicineBatchStatus = (typeof MedicineBatchStatus)[keyof typeof MedicineBatchStatus];
 
-export enum LabOrderItemStatus {
-  ORDERED = "ORDERED",
-  SAMPLE_COLLECTED = "SAMPLE_COLLECTED",
-  IN_PROGRESS = "IN_PROGRESS",
-  RESULT_UPLOADED = "RESULT_UPLOADED",
-  APPROVED = "APPROVED",
-  REJECTED = "REJECTED",
-}
+export const LabOrderItemStatus = {
+  ORDERED: "ORDERED",
+  SAMPLE_COLLECTED: "SAMPLE_COLLECTED",
+  IN_PROGRESS: "IN_PROGRESS",
+  RESULT_UPLOADED: "RESULT_UPLOADED",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+export type LabOrderItemStatus = (typeof LabOrderItemStatus)[keyof typeof LabOrderItemStatus];
 
-export enum LabOrderPriority {
-  ROUTINE = "ROUTINE",
-  URGENT = "URGENT",
-}
+export const LabOrderPriority = { ROUTINE: "ROUTINE", URGENT: "URGENT" } as const;
+export type LabOrderPriority = (typeof LabOrderPriority)[keyof typeof LabOrderPriority];
 
-export enum InvoiceStatus {
-  DRAFT = "DRAFT",
-  FINALIZED = "FINALIZED",
-  PARTIALLY_PAID = "PARTIALLY_PAID",
-  PAID = "PAID",
-  CANCELLED = "CANCELLED",
-  REFUNDED = "REFUNDED",
-}
+export const InvoiceStatus = {
+  DRAFT: "DRAFT",
+  FINALIZED: "FINALIZED",
+  PARTIALLY_PAID: "PARTIALLY_PAID",
+  PAID: "PAID",
+  CANCELLED: "CANCELLED",
+  REFUNDED: "REFUNDED",
+} as const;
+export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
 
-export enum InvoiceItemSourceType {
-  CONSULTATION = "CONSULTATION",
-  LAB = "LAB",
-  PHARMACY = "PHARMACY",
-  ROOM = "ROOM",
-  OTHER = "OTHER",
-}
+export const InvoiceItemSourceType = {
+  CONSULTATION: "CONSULTATION",
+  LAB: "LAB",
+  PHARMACY: "PHARMACY",
+  ROOM: "ROOM",
+  OTHER: "OTHER",
+} as const;
+export type InvoiceItemSourceType =
+  (typeof InvoiceItemSourceType)[keyof typeof InvoiceItemSourceType];
 
-export enum PaymentMethod {
-  STRIPE = "STRIPE",
-  RAZORPAY = "RAZORPAY",
-  CASH = "CASH",
-}
+export const PaymentMethod = { STRIPE: "STRIPE", RAZORPAY: "RAZORPAY", CASH: "CASH" } as const;
+export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
 
-export enum PaymentStatus {
-  PENDING = "PENDING",
-  SUCCEEDED = "SUCCEEDED",
-  FAILED = "FAILED",
-  REFUNDED = "REFUNDED",
-}
+export const PaymentStatus = {
+  PENDING: "PENDING",
+  SUCCEEDED: "SUCCEEDED",
+  FAILED: "FAILED",
+  REFUNDED: "REFUNDED",
+} as const;
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
-export enum NotificationChannel {
-  EMAIL = "EMAIL",
-  SMS = "SMS",
-  IN_APP = "IN_APP",
-}
+export const NotificationChannel = { EMAIL: "EMAIL", SMS: "SMS", IN_APP: "IN_APP" } as const;
+export type NotificationChannel = (typeof NotificationChannel)[keyof typeof NotificationChannel];
 
-export enum NotificationStatus {
-  PENDING = "PENDING",
-  SENT = "SENT",
-  FAILED = "FAILED",
-}
+export const NotificationStatus = { PENDING: "PENDING", SENT: "SENT", FAILED: "FAILED" } as const;
+export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus];
 
 /** A patient's self-identified gender. Distinct from ReferenceRangeGender. */
-export enum Gender {
-  MALE = "MALE",
-  FEMALE = "FEMALE",
-  OTHER = "OTHER",
-}
+export const Gender = { MALE: "MALE", FEMALE: "FEMALE", OTHER: "OTHER" } as const;
+export type Gender = (typeof Gender)[keyof typeof Gender];
 
 /** The gender bucket a lab reference range applies to — not a person's gender. */
-export enum ReferenceRangeGender {
-  MALE = "MALE",
-  FEMALE = "FEMALE",
-  ANY = "ANY",
-}
+export const ReferenceRangeGender = { MALE: "MALE", FEMALE: "FEMALE", ANY: "ANY" } as const;
+export type ReferenceRangeGender = (typeof ReferenceRangeGender)[keyof typeof ReferenceRangeGender];
 
-export enum RoomType {
-  GENERAL = "GENERAL",
-  PRIVATE = "PRIVATE",
-  ICU = "ICU",
-  OT = "OT",
-}
+export const RoomType = { GENERAL: "GENERAL", PRIVATE: "PRIVATE", ICU: "ICU", OT: "OT" } as const;
+export type RoomType = (typeof RoomType)[keyof typeof RoomType];
 
-export enum BedStatus {
-  VACANT = "VACANT",
-  OCCUPIED = "OCCUPIED",
-  MAINTENANCE = "MAINTENANCE",
-}
+export const BedStatus = {
+  VACANT: "VACANT",
+  OCCUPIED: "OCCUPIED",
+  MAINTENANCE: "MAINTENANCE",
+} as const;
+export type BedStatus = (typeof BedStatus)[keyof typeof BedStatus];
 
-export enum FamilyHistoryCondition {
-  DIABETES = "DIABETES",
-  HYPERTENSION = "HYPERTENSION",
-  CANCER = "CANCER",
-  CARDIAC = "CARDIAC",
-  OTHER = "OTHER",
-}
+export const FamilyHistoryCondition = {
+  DIABETES: "DIABETES",
+  HYPERTENSION: "HYPERTENSION",
+  CANCER: "CANCER",
+  CARDIAC: "CARDIAC",
+  OTHER: "OTHER",
+} as const;
+export type FamilyHistoryCondition =
+  (typeof FamilyHistoryCondition)[keyof typeof FamilyHistoryCondition];
 
-export enum AttachmentOwnerType {
-  MEDICAL_RECORD = "MEDICAL_RECORD",
-  LAB_RESULT = "LAB_RESULT",
-  PRESCRIPTION = "PRESCRIPTION",
-}
+export const AttachmentOwnerType = {
+  MEDICAL_RECORD: "MEDICAL_RECORD",
+  LAB_RESULT: "LAB_RESULT",
+  PRESCRIPTION: "PRESCRIPTION",
+} as const;
+export type AttachmentOwnerType = (typeof AttachmentOwnerType)[keyof typeof AttachmentOwnerType];
 
 /** Data model only in v1 — no adjudication workflow (see docs/11-DECISIONS.md D-011). */
-export enum InsuranceClaimStatus {
-  SUBMITTED = "SUBMITTED",
-  APPROVED = "APPROVED",
-  REJECTED = "REJECTED",
-  PAID = "PAID",
-}
+export const InsuranceClaimStatus = {
+  SUBMITTED: "SUBMITTED",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  PAID: "PAID",
+} as const;
+export type InsuranceClaimStatus = (typeof InsuranceClaimStatus)[keyof typeof InsuranceClaimStatus];

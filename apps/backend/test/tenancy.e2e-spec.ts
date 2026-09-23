@@ -53,6 +53,8 @@ describe("Tenant scoping (e2e)", () => {
           data: {
             email: `patient-a-${suffix}@test.medcore.test`,
             passwordHash: "x",
+            firstName: "Test",
+            lastName: "User",
             role: UserRole.PATIENT,
             status: UserStatus.ACTIVE,
           },
@@ -67,6 +69,8 @@ describe("Tenant scoping (e2e)", () => {
           data: {
             email: `patient-b-${suffix}@test.medcore.test`,
             passwordHash: "x",
+            firstName: "Test",
+            lastName: "User",
             role: UserRole.PATIENT,
             status: UserStatus.ACTIVE,
           },
@@ -117,6 +121,8 @@ describe("Tenant scoping (e2e)", () => {
             hospitalId: hospitalBId,
             email: `spoof-attempt-${randomUUID()}@test.medcore.test`,
             passwordHash: "x",
+            firstName: "Test",
+            lastName: "User",
             role: UserRole.PATIENT,
             status: UserStatus.ACTIVE,
           } as never,

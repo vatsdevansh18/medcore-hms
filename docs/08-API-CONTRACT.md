@@ -64,19 +64,21 @@ Full parameter/DTO detail lives in Swagger (generated in Phase 3+ from `@nestjs/
 
 ### 4.1 Auth
 
-| Method + Path                | Auth           | FR          | Notes                                                           |
-| ---------------------------- | -------------- | ----------- | --------------------------------------------------------------- |
-| `POST /auth/register`        | Public         | FR-AUTH-001 | Creates `PENDING` account, sends email OTP                      |
-| `POST /auth/verify-email`    | Public (token) | FR-AUTH-001 | 6-digit OTP, 10 min TTL                                         |
-| `POST /auth/verify-phone`    | Authenticated  | FR-AUTH-005 | Twilio SMS OTP                                                  |
-| `POST /auth/login`           | Public         | FR-AUTH-002 | Returns access token + sets refresh cookie                      |
-| `POST /auth/refresh`         | Refresh cookie | FR-AUTH-003 | Rotates refresh token                                           |
-| `POST /auth/forgot-password` | Public         | FR-AUTH-004 | Always 200, regardless of email existence (no user enumeration) |
-| `POST /auth/reset-password`  | Public (token) | FR-AUTH-004 | Single-use, 60 min TTL                                          |
-| `POST /auth/logout`          | Authenticated  | FR-AUTH-002 | Revokes current device's refresh token                          |
-| `GET /auth/sessions`         | Authenticated  | FR-AUTH-006 | Lists active device sessions                                    |
-| `DELETE /auth/sessions/:id`  | Authenticated  | FR-AUTH-006 | Revoke one or all (`:id = all`)                                 |
-| `GET /auth/me`               | Authenticated  | FR-AUTH-007 | Profile + role + permission set                                 |
+| Method + Path                 | Auth           | FR          | Notes                                                                                                                                                                    |
+| ----------------------------- | -------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /auth/register`         | Public         | FR-AUTH-001 | Patient self-registration only — see `07-RBAC-MATRIX.md` §3.2; creates a `PENDING` account, sends email OTP                                                              |
+| `POST /auth/verify-email`     | Public (token) | FR-AUTH-001 | 6-digit OTP, 10 min TTL                                                                                                                                                  |
+| `POST /auth/resend-email-otp` | Public         | FR-AUTH-001 | Added in Phase 3 (not in the original endpoint index) — silently no-ops for an unknown/already-verified email, matching the non-enumeration posture of `forgot-password` |
+| `POST /auth/send-phone-otp`   | Authenticated  | FR-AUTH-005 | Added in Phase 3 — triggers the SMS OTP `verify-phone` consumes; requires a phone number already on file                                                                 |
+| `POST /auth/verify-phone`     | Authenticated  | FR-AUTH-005 | Twilio SMS OTP                                                                                                                                                           |
+| `POST /auth/login`            | Public         | FR-AUTH-002 | Returns access token + sets refresh cookie                                                                                                                               |
+| `POST /auth/refresh`          | Refresh cookie | FR-AUTH-003 | Rotates refresh token                                                                                                                                                    |
+| `POST /auth/forgot-password`  | Public         | FR-AUTH-004 | Always 200, regardless of email existence (no user enumeration)                                                                                                          |
+| `POST /auth/reset-password`   | Public (token) | FR-AUTH-004 | Single-use, 60 min TTL                                                                                                                                                   |
+| `POST /auth/logout`           | Authenticated  | FR-AUTH-002 | Revokes current device's refresh token                                                                                                                                   |
+| `GET /auth/sessions`          | Authenticated  | FR-AUTH-006 | Lists active device sessions                                                                                                                                             |
+| `DELETE /auth/sessions/:id`   | Authenticated  | FR-AUTH-006 | Revoke one or all (`:id = all`)                                                                                                                                          |
+| `GET /auth/me`                | Authenticated  | FR-AUTH-007 | Profile + role + permission set                                                                                                                                          |
 
 ### 4.2 Hospitals, Departments, Users
 

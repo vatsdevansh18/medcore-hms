@@ -42,6 +42,8 @@ describe("Audit log extension (e2e)", () => {
             hospitalId,
             email: `actor-${suffix}@test.medcore.test`,
             passwordHash: "x",
+            firstName: "Test",
+            lastName: "User",
             role: UserRole.HOSPITAL_ADMIN,
             status: UserStatus.ACTIVE,
           },

@@ -275,6 +275,8 @@ model User {
   hospital        Hospital?  @relation(fields: [hospitalId], references: [id])
   email           String     @unique
   phone           String?
+  firstName       String
+  lastName        String
   passwordHash    String
   role            UserRole
   status          UserStatus @default(PENDING)

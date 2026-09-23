@@ -96,6 +96,8 @@ async function seedHospital(seed: HospitalSeed, passwordHash: string) {
         data: {
           hospitalId: hospital.id,
           email: `hospitaladmin@${seed.slug}.medcore.test`,
+          firstName: faker.person.firstName(),
+          lastName: faker.person.lastName(),
           passwordHash,
           role: UserRole.HOSPITAL_ADMIN,
           status: UserStatus.ACTIVE,
@@ -124,6 +126,8 @@ async function seedHospital(seed: HospitalSeed, passwordHash: string) {
           data: {
             hospitalId: hospital.id,
             email: `${role.toLowerCase()}@${seed.slug}.medcore.test`,
+            firstName: faker.person.firstName(),
+            lastName: faker.person.lastName(),
             passwordHash,
             role,
             status: UserStatus.ACTIVE,
@@ -149,6 +153,8 @@ async function seedHospital(seed: HospitalSeed, passwordHash: string) {
           data: {
             hospitalId: hospital.id,
             email: `dr.${firstName}.${lastName}@${seed.slug}.medcore.test`.toLowerCase(),
+            firstName,
+            lastName,
             passwordHash,
             role: UserRole.DOCTOR,
             status: UserStatus.ACTIVE,
@@ -199,6 +205,8 @@ async function seedHospital(seed: HospitalSeed, passwordHash: string) {
           data: {
             hospitalId: hospital.id,
             email: `${firstName}.${lastName}.${i}@patient.medcore.test`.toLowerCase(),
+            firstName,
+            lastName,
             passwordHash,
             role: UserRole.PATIENT,
             status: UserStatus.ACTIVE,
@@ -322,6 +330,8 @@ async function main() {
     prisma.user.create({
       data: {
         email: "superadmin@medcore.test",
+        firstName: "Super",
+        lastName: "Admin",
         passwordHash,
         role: UserRole.SUPER_ADMIN,
         status: UserStatus.ACTIVE,
