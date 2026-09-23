@@ -30,20 +30,20 @@ No repository-local Claude configuration (`.claude/`, `CLAUDE.md`) existed prior
 
 ## 4. Deliverables Produced
 
-| File                          | Purpose                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `docs/01-PRD.md`              | Product vision, users, scope, business rules, MVP boundaries, requirements classification                     |
-| `docs/02-SRS.md`              | Numbered FR/NFR requirements with acceptance signals                                                          |
-| `docs/03-ARCHITECTURE.md`     | System/frontend/backend/DB/tenancy/auth/notification/payment/deployment architecture, with 5 Mermaid diagrams |
-| `docs/04-UI-UX.md`            | Design system, patterns, accessibility, responsiveness, role-specific UX, animation guidelines                |
-| `docs/05-DEVELOPMENT-PLAN.md` | Monorepo structure, 17-phase roadmap mapped to requirements, dependency graph, phase gate checklist           |
-| `docs/06-DATABASE-DESIGN.md`  | Full entity catalog, 5 grouped ER diagrams, indexing, key design decisions, migration/seed strategy           |
-| `docs/07-RBAC-MATRIX.md`      | Full 9-role × module permission matrix, enforcement model, test traceability                                  |
-| `docs/08-API-CONTRACT.md`     | Response envelopes, error codes, endpoint index by module, DTO/validation rules, information-disclosure rule  |
-| `docs/09-SECURITY.md`         | STRIDE-oriented threat model, full security control catalog (`SEC-*`)                                         |
-| `docs/10-TESTING-STRATEGY.md` | Testing pyramid, the 9 mandatory scenarios traced to requirements, additional risk-based scenarios            |
-| `docs/11-DECISIONS.md`        | 12 documented engineering decisions with alternatives and rationale                                           |
-| `docs/PHASE-0-REVIEW.md`      | This document                                                                                                 |
+| File                                   | Purpose                                                                                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `docs/01-PRD.md`                       | Product vision, users, scope, business rules, MVP boundaries, requirements classification                     |
+| `docs/02-SRS.md`                       | Numbered FR/NFR requirements with acceptance signals                                                          |
+| `docs/03-ARCHITECTURE.md`              | System/frontend/backend/DB/tenancy/auth/notification/payment/deployment architecture, with 5 Mermaid diagrams |
+| `docs/04-UI-UX.md`                     | Design system, patterns, accessibility, responsiveness, role-specific UX, animation guidelines                |
+| `docs/05-DEVELOPMENT-PLAN.md`          | Monorepo structure, 17-phase roadmap mapped to requirements, dependency graph, phase gate checklist           |
+| `docs/06-DATABASE-DESIGN.md`           | Full entity catalog, 5 grouped ER diagrams, indexing, key design decisions, migration/seed strategy           |
+| `docs/07-RBAC-MATRIX.md`               | Full 9-role × module permission matrix, enforcement model, test traceability                                  |
+| `docs/08-API-CONTRACT.md`              | Response envelopes, error codes, endpoint index by module, DTO/validation rules, information-disclosure rule  |
+| `docs/09-SECURITY.md`                  | STRIDE-oriented threat model, full security control catalog (`SEC-*`)                                         |
+| `docs/10-TESTING-STRATEGY.md`          | Testing pyramid, the 9 mandatory scenarios traced to requirements, additional risk-based scenarios            |
+| `docs/11-DECISIONS.md`                 | 12 documented engineering decisions with alternatives and rationale                                           |
+| `docs/phase-reviews/PHASE-0-REVIEW.md` | This document                                                                                                 |
 
 Repository was initialised as a git repo this phase; all Phase 0 deliverables are committed with a meaningful message (§8).
 

@@ -6,7 +6,7 @@
 
 ## 1. Methodology
 
-Implementation proceeds in 17 gated phases, each closing with a `PHASE-X-REVIEW.md` at status `PASS`, `PASS WITH DOCUMENTED MINOR ISSUES`, `BLOCKED`, or `FAIL`. No phase begins until the previous one's gate passes **and** the user explicitly instructs the next phase to start. This governs _process_; the brief's week-by-week grouping governs _scope grouping_ and is preserved below as a mapping, not as a calendar (`11-DECISIONS.md` D-001).
+Implementation proceeds in 17 gated phases, each closing with a `docs/phase-reviews/PHASE-X-REVIEW.md` at status `PASS`, `PASS WITH DOCUMENTED MINOR ISSUES`, `BLOCKED`, or `FAIL`. No phase begins until the previous one's gate passes **and** the user explicitly instructs the next phase to start. This governs _process_; the brief's week-by-week grouping governs _scope grouping_ and is preserved below as a mapping, not as a calendar (`11-DECISIONS.md` D-001). Within a phase, the detailed implement/verify/fix/re-verify discipline in `docs/12-QUALITY-PROTOCOL.md` applies to every meaningful feature or change, not just at the final gate.
 
 Each phase follows the same execution sequence: restate objective → list requirements → identify dependencies → implement → test → security review → UI/UX review → architecture review → update docs → run the phase gate → stop.
 
@@ -161,17 +161,20 @@ flowchart TD
 
 ## 5. Phase Gate Checklist (applies to every phase)
 
+The full, authoritative quality-gate process — the implement → verify → root-cause-fix → re-verify cycle, mandatory negative/edge-case testing, continuous security review, and the complete phase-review format — is specified in **`docs/12-QUALITY-PROTOCOL.md`**. The checklist below is the short form; `12-QUALITY-PROTOCOL.md` governs whenever the two appear to conflict.
+
 - [ ] All requirements listed for the phase are implemented
 - [ ] Acceptance criteria satisfied
-- [ ] Unit/integration tests written and passing for new code
+- [ ] Unit/integration tests written and passing for new code, including negative/failure-path cases (`12-QUALITY-PROTOCOL.md` §5)
 - [ ] `tsc --noEmit` passes on both apps
 - [ ] ESLint passes with zero errors (warnings triaged, not silently ignored)
 - [ ] `docker compose build` succeeds
-- [ ] No known critical defect remains open
-- [ ] Security checklist items relevant to the phase reviewed (`09-SECURITY.md`)
+- [ ] No known critical or high-severity defect remains open
+- [ ] Security checklist items relevant to the phase reviewed (`09-SECURITY.md`); tenancy/RBAC explicitly re-verified for any phase touching hospital-scoped data
 - [ ] UI/UX checklist reviewed for any new screens (`04-UI-UX.md` §9)
 - [ ] Architecture remains consistent with `03-ARCHITECTURE.md`, or that document is updated to reflect an intentional change
 - [ ] Relevant docs updated (SRS status, API contract, decisions log if applicable)
-- [ ] `PHASE-X-REVIEW.md` written with final gate status
+- [ ] Regression checks run for anything the phase's changes could plausibly have affected (`12-QUALITY-PROTOCOL.md` §16)
+- [ ] `docs/phase-reviews/PHASE-X-REVIEW.md` written in the format specified by `12-QUALITY-PROTOCOL.md` §23, with final gate status
 
-A phase is never marked `PASS` with a known critical defect outstanding; it is marked `BLOCKED` or `FAIL` instead, with the blocking issue named explicitly.
+A phase is never marked `PASS` with a known critical or high-severity defect outstanding; it is marked `BLOCKED` or `FAIL` instead, with the blocking issue named explicitly.

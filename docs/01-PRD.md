@@ -138,4 +138,4 @@ The product is successful when a reviewer can, using seeded demo data and role-s
 
 - All Mandatory items above are implemented, tested, and demonstrable.
 - The nine mandatory test scenarios listed in the brief §11 pass in CI (see `10-TESTING-STRATEGY.md`).
-- Every phase in `05-DEVELOPMENT-PLAN.md` closes with a `PHASE-X-REVIEW.md` at status `PASS` or `PASS WITH DOCUMENTED MINOR ISSUES` — never `FAIL` or silently skipped.
+- Every phase in `05-DEVELOPMENT-PLAN.md` closes with a `docs/phase-reviews/PHASE-X-REVIEW.md` at status `PASS` or `PASS WITH DOCUMENTED MINOR ISSUES` — never `FAIL` or silently skipped, following the quality-gate process in `12-QUALITY-PROTOCOL.md`.
