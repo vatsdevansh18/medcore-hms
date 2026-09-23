@@ -5,6 +5,21 @@ FROM node:20-alpine AS base
 # ("Error loading shared library libssl.so.1.1") that's easy to miss until
 # the container actually receives its first query, not at build time.
 RUN apk add --no-cache openssl
+# Phase 7 (prescription PDF generation, docs/03-ARCHITECTURE.md §12
+# `pdf-generate` job): the bare `puppeteer` npm package bundles a
+# glibc-linked Chromium download that does not run on musl-libc Alpine
+# (missing shared libraries at launch, not at install time — the same class
+# of "works natively, breaks in the Alpine image" surprise as the Prisma
+# engine binary above). Installing Alpine's own `chromium` package and
+# pointing Puppeteer at it via `PUPPETEER_EXECUTABLE_PATH` — with
+# `PUPPETEER_SKIP_DOWNLOAD` so `pnpm install` doesn't waste time/bandwidth
+# downloading a Chromium build that would never run — is the standard fix.
+# Native Windows/macOS dev is unaffected: these env vars only take effect
+# inside this image, so `pnpm install` there still downloads Puppeteer's own
+# bundled Chromium normally.
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /workspace
 

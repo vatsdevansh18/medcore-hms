@@ -10,9 +10,12 @@ import { AppException } from "../common/errors/app-exception";
 import { PaginatedResult } from "../common/pagination/paginated-result";
 import type { PaginationQueryDto } from "../common/pagination/pagination-query.dto";
 import { SAFE_USER_SELECT } from "../common/prisma/safe-user-select";
+import { S3Service } from "../common/storage/s3.service";
 import { PasswordResetService } from "../auth/services/password-reset.service";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
 import type { CreateDoctorDto } from "./dto/create-doctor.dto";
+import type { UploadSignatureDto } from "./dto/upload-signature.dto";
+import { validateSignatureUpload } from "./signature-validation";
 
 @Injectable()
 export class DoctorsService {
@@ -20,6 +23,7 @@ export class DoctorsService {
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly config: ConfigService,
     private readonly passwordResetService: PasswordResetService,
+    private readonly s3: S3Service,
   ) {}
 
   /** FR-HOSP-003 — creates the User (role=DOCTOR) and DoctorProfile atomically. */
@@ -136,5 +140,36 @@ export class DoctorsService {
     );
     if (!doctor) throw new NotFoundException("Doctor not found.");
     return doctor;
+  }
+
+  /** FR-RX-003 — lets a doctor upload the signature image later overlaid on
+   * their prescription PDFs. Self only, mirroring `AvailabilityService`'s
+   * "self" scoping (docs/07-RBAC-MATRIX.md §3.3 note, same principle
+   * applies to a doctor's own profile assets). */
+  async uploadSignature(id: string, dto: UploadSignatureDto, caller: AuthenticatedUser) {
+    if (!caller.hospitalId) throw new NotFoundException("Doctor not found.");
+    const hospitalId = caller.hospitalId;
+
+    const doctor = await TenantContext.run(
+      { hospitalId, userId: caller.sub, bypassTenancy: false },
+      () => this.prisma.doctorProfile.findUnique({ where: { id } }),
+    );
+    if (!doctor) throw new NotFoundException("Doctor not found.");
+    if (caller.role !== UserRole.DOCTOR || doctor.userId !== caller.sub) {
+      throw new NotFoundException("Doctor not found.");
+    }
+
+    validateSignatureUpload(dto.fileName, dto.mimeType, dto.sizeBytes);
+    const storageKey = this.s3.buildKey(hospitalId, `doctors/${doctor.id}/signature`, dto.fileName);
+
+    await TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
+      this.prisma.doctorProfile.update({
+        where: { id: doctor.id },
+        data: { signatureImageUrl: storageKey },
+      }),
+    );
+
+    const uploadUrl = await this.s3.getUploadUrl(storageKey, dto.mimeType);
+    return { uploadUrl };
   }
 }

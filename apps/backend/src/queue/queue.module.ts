@@ -1,10 +1,12 @@
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { BullModule } from "@nestjs/bullmq";
-import { APPOINTMENT_REMINDER_QUEUE } from "./queue.constants";
+import { APPOINTMENT_REMINDER_QUEUE, PRESCRIPTION_PDF_QUEUE } from "./queue.constants";
 import { AppointmentReminderQueueService } from "./appointment-reminder-queue.service";
 import { AppointmentReminderProcessor } from "./appointment-reminder.processor";
 import { ReminderDeliveryStub, REMINDER_DELIVERY_PORT } from "./reminder-delivery.stub";
+import { PrescriptionPdfQueueService } from "./prescription-pdf-queue.service";
+import { PrescriptionPdfProcessor } from "./prescription-pdf.processor";
 
 /**
  * BullMQ needs its own Redis connection, never the shared `REDIS_CLIENT`
@@ -41,12 +43,25 @@ import { ReminderDeliveryStub, REMINDER_DELIVERY_PORT } from "./reminder-deliver
         removeOnFail: { age: 30 * 24 * 60 * 60 },
       },
     }),
+    // docs/03-ARCHITECTURE.md §12: 2 attempts, no backoff config specified
+    // there — a flat retry is enough for a deterministic render step (no
+    // external API rate limits to back off from, unlike email/SMS).
+    BullModule.registerQueue({
+      name: PRESCRIPTION_PDF_QUEUE,
+      defaultJobOptions: {
+        attempts: 2,
+        removeOnComplete: { age: 7 * 24 * 60 * 60 },
+        removeOnFail: { age: 30 * 24 * 60 * 60 },
+      },
+    }),
   ],
   providers: [
     AppointmentReminderQueueService,
     AppointmentReminderProcessor,
     { provide: REMINDER_DELIVERY_PORT, useClass: ReminderDeliveryStub },
+    PrescriptionPdfQueueService,
+    PrescriptionPdfProcessor,
   ],
-  exports: [AppointmentReminderQueueService],
+  exports: [AppointmentReminderQueueService, PrescriptionPdfQueueService],
 })
 export class QueueModule {}

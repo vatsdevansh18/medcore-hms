@@ -698,9 +698,20 @@ model Prescription {
   patientId         String
   patient           PatientProfile     @relation(fields: [patientId], references: [id])
   signatureImageUrl String?
+  /// S3 storage key (not a public URL) of the rendered PDF, set once the
+  /// async `pdf-generate` job completes — null until then. Access is always
+  /// mediated by a pre-signed GET URL (SEC-FILE-003), same pattern as
+  /// `Attachment.storageKey` from Phase 6.
   pdfUrl            String?
   status            PrescriptionStatus @default(ISSUED)
   createdAt         DateTime           @default(now())
+
+  /// FR-RX-003 — a prescription is immutable once generated; a correction
+  /// is a new prescription referencing the one it supersedes, added Phase 7
+  /// gap-fix (see docs/phase-reviews/PHASE-7-REVIEW.md).
+  supersedesId   String?       @unique
+  supersedes     Prescription? @relation("PrescriptionSupersession", fields: [supersedesId], references: [id])
+  supersededBy   Prescription? @relation("PrescriptionSupersession")
 
   items PrescriptionItem[]
 

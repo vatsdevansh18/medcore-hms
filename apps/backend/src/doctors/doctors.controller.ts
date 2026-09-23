@@ -10,6 +10,7 @@ import { FindDoctorsQueryDto } from "./dto/find-doctors-query.dto";
 import { SetAvailabilityDto } from "./dto/availability-slot.dto";
 import { CreateAvailabilityExceptionDto } from "./dto/create-availability-exception.dto";
 import { GetAvailabilityQueryDto } from "./dto/get-availability-query.dto";
+import { UploadSignatureDto } from "./dto/upload-signature.dto";
 
 /** docs/07-RBAC-MATRIX.md §3.3 — "View doctor availability (for booking)":
  * SUPER_ADMIN explicitly has no access (not part of any hospital's booking
@@ -77,5 +78,15 @@ export class DoctorsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.availabilityService.createException(id, dto, user);
+  }
+
+  @Roles(UserRole.DOCTOR)
+  @Post(":id/signature")
+  uploadSignature(
+    @Param("id") id: string,
+    @Body() dto: UploadSignatureDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.doctorsService.uploadSignature(id, dto, user);
   }
 }

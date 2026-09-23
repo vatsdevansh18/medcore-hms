@@ -140,11 +140,14 @@ Full parameter/DTO detail lives in Swagger (generated in Phase 3+ from `@nestjs/
 
 ### 4.6 Prescriptions
 
-| Method + Path                | Auth                                      | FR            |
-| ---------------------------- | ----------------------------------------- | ------------- |
-| `POST /prescriptions`        | Doctor                                    | FR-RX-001/002 |
-| `GET /prescriptions/:id`     | Doctor / Pharmacist (own) / Patient (own) | FR-RX-001     |
-| `GET /prescriptions/:id/pdf` | Doctor / Patient (own)                    | FR-RX-003     |
+| Method + Path                | Auth                                                | FR            | Notes                                                                                                                                                 |
+| ----------------------------- | ---------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /prescriptions`        | Doctor                                              | FR-RX-001/002 | "Own encounter" only — caller must be `medicalRecord.doctor`; optional `supersedesId` for a correction (must be `ISSUED`, same patient, not already superseded) |
+| `GET /prescriptions/:id`     | Doctor / Nurse (own hospital) / Pharmacist (own) / Patient (own) | FR-RX-001     | Nurse added per §3.5's "for admin note" row, simplified to full own-hospital read (same pattern as other 🟡-scoped roles)                                |
+| `GET /prescriptions/:id/pdf` | Doctor / Patient (own)                              | FR-RX-003     | Narrower than "View prescription" — no Nurse/Pharmacist. Returns `{downloadUrl}` (pre-signed GET), `409` if the async PDF job hasn't finished yet          |
+| `POST /doctors/:id/signature` | Doctor (self)                                       | FR-RX-003     | Added in Phase 7 (not in the original index) — same declare-then-pre-signed-upload pattern as EMR attachments; returns `{uploadUrl}`                        |
+| `GET /medicines?search=`     | Hospital Admin (own) / Doctor (own) / Pharmacist (own) | §3.7          | Added in Phase 7, read-only — brought forward from the Phase 9 `FR-PHARM-001` row for prescription-creation search (`docs/11-DECISIONS.md` D-017); catalog/batch management remains Phase 9 |
+| `GET /medicines/:id`         | Hospital Admin (own) / Doctor (own) / Pharmacist (own) | §3.7          | Added in Phase 7                                                                                                                                       |
 
 ### 4.7 Laboratory
 

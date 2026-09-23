@@ -7,6 +7,6 @@
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "transformIgnorePatterns": [
-    "/node_modules/(?!.*(@nestjs\\+bullmq|@nestjs\\+bull-shared|@nestjs/bullmq|@nestjs/bull-shared))"
+    "/node_modules/(?!.*(@nestjs\\+bullmq|@nestjs\\+bull-shared|@nestjs/bullmq|@nestjs/bull-shared|puppeteer|puppeteer-core))"
   ]
 }

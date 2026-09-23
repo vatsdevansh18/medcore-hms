@@ -20,3 +20,10 @@ export interface AppointmentReminderJobData {
 export function reminderJobId(appointmentId: string, window: ReminderWindow): string {
   return `${appointmentId}-${window}`;
 }
+
+/** docs/03-ARCHITECTURE.md §12 `pdf-generate` queue — Phase 7. */
+export const PRESCRIPTION_PDF_QUEUE = "pdf-generate";
+
+export interface PrescriptionPdfJobData {
+  prescriptionId: string;
+}

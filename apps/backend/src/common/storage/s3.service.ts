@@ -7,6 +7,7 @@ import {
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
+  type PutObjectCommandInput,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -62,9 +63,11 @@ export class S3Service implements OnModuleInit {
     }
   }
 
-  buildKey(hospitalId: string, medicalRecordId: string, fileName: string): string {
+  /** `scope` is a `/`-joined path prefix (e.g. `medical-records/{id}`,
+   * `doctors/{id}/signature`) — the caller owns what that prefix means. */
+  buildKey(hospitalId: string, scope: string, fileName: string): string {
     const sanitized = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-    return `hospitals/${hospitalId}/medical-records/${medicalRecordId}/${randomUUID()}-${sanitized}`;
+    return `hospitals/${hospitalId}/${scope}/${randomUUID()}-${sanitized}`;
   }
 
   async getUploadUrl(key: string, mimeType: string): Promise<string> {
@@ -75,5 +78,16 @@ export class S3Service implements OnModuleInit {
   async getDownloadUrl(key: string): Promise<string> {
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
     return getSignedUrl(this.client, command, { expiresIn: PRESIGNED_URL_TTL_SECONDS });
+  }
+
+  /** Server-side upload — for content the backend itself generates (e.g. a
+   * rendered prescription PDF), as opposed to `getUploadUrl`'s pre-signed
+   * URL for a client-originated file (docs/03-ARCHITECTURE.md §10 still
+   * applies: the bucket stays private either way, reads are always via
+   * `getDownloadUrl`). */
+  async putObject(key: string, body: PutObjectCommandInput["Body"], contentType: string): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: contentType }),
+    );
   }
 }

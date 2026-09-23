@@ -184,8 +184,10 @@ erDiagram
         uuid medicalRecordId FK
         uuid doctorId FK
         uuid patientId FK
-        string pdfUrl
+        string signatureImageUrl "S3 key, snapshot at issue time"
+        string pdfUrl "S3 key, not a public URL"
         enum status "ISSUED|PARTIALLY_DISPENSED|DISPENSED|CANCELLED"
+        uuid supersedesId FK "nullable, unique; FR-RX-003 correction chain; added Phase 7 gap-fix"
         timestamptz createdAt
     }
     PRESCRIPTION_ITEM {

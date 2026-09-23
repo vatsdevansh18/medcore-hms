@@ -8,6 +8,7 @@ import { buildLoggerConfig } from "./common/logging/logger.config";
 import { HealthModule } from "./health/health.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RedisModule } from "./redis/redis.module";
+import { InfraModule } from "./common/infra.module";
 import { AuthModule } from "./auth/auth.module";
 import { HospitalsModule } from "./hospitals/hospitals.module";
 import { UsersModule } from "./users/users.module";
@@ -16,6 +17,8 @@ import { PatientsModule } from "./patients/patients.module";
 import { QueueModule } from "./queue/queue.module";
 import { AppointmentsModule } from "./appointments/appointments.module";
 import { EmrModule } from "./emr/emr.module";
+import { MedicinesModule } from "./medicines/medicines.module";
+import { PrescriptionsModule } from "./prescriptions/prescriptions.module";
 import { JwtAuthGuard } from "./auth/guards/jwt-auth.guard";
 import { RolesGuard } from "./auth/guards/roles.guard";
 import { AppThrottlerGuard } from "./common/throttler/app-throttler.guard";
@@ -56,6 +59,7 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
     }),
     PrismaModule,
     RedisModule,
+    InfraModule,
     HealthModule,
     AuthModule,
     HospitalsModule,
@@ -65,6 +69,8 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
     QueueModule,
     AppointmentsModule,
     EmrModule,
+    MedicinesModule,
+    PrescriptionsModule,
   ],
   providers: [
     // Order matters: throttling and authentication happen before RBAC, and

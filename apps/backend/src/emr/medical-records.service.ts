@@ -257,7 +257,7 @@ export class MedicalRecordsService {
     const hospitalId = await this.requireHospitalId(caller);
     validateAttachment(dto.fileName, dto.mimeType, dto.sizeBytes);
 
-    const storageKey = this.s3.buildKey(hospitalId, record.id, dto.fileName);
+    const storageKey = this.s3.buildKey(hospitalId, `medical-records/${record.id}`, dto.fileName);
 
     const attachment = await TenantContext.run(
       { hospitalId, userId: caller.sub, bypassTenancy: false },
