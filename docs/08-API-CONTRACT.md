@@ -80,28 +80,35 @@ Full parameter/DTO detail lives in Swagger (generated in Phase 3+ from `@nestjs/
 | `DELETE /auth/sessions/:id`   | Authenticated  | FR-AUTH-006 | Revoke one or all (`:id = all`)                                                                                                                                          |
 | `GET /auth/me`                | Authenticated  | FR-AUTH-007 | Profile + role + permission set                                                                                                                                          |
 
-### 4.2 Hospitals, Departments, Users
+### 4.2 Hospitals, Departments, Users, Patients
 
-| Method + Path                      | Auth (RBAC ref)                 | FR          |
-| ---------------------------------- | ------------------------------- | ----------- |
-| `POST /hospitals`                  | Super Admin                     | FR-HOSP-001 |
-| `PATCH /hospitals/:id/verify`      | Super Admin                     | FR-HOSP-001 |
-| `GET /hospitals`                   | Super Admin                     | §3.1        |
-| `GET /hospitals/:id`               | Super Admin, own Hospital Admin | §3.1        |
-| `GET /hospitals/:id/departments`   | Hospital staff (own)            | FR-HOSP-002 |
-| `POST /hospitals/:id/departments`  | Hospital Admin (own)            | FR-HOSP-002 |
-| `POST /users` (staff provisioning) | Hospital Admin (own)            | FR-HOSP-002 |
-| `GET /users/:id`                   | Self or Admin (own hospital)    | §3.2        |
+| Method + Path                                      | Auth (RBAC ref)                     | FR          | Notes                                                                                                                                             |
+| --------------------------------------------------- | ------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /hospitals`                                  | Super Admin                         | FR-HOSP-001 |                                                                                                                                                    |
+| `PATCH /hospitals/:id/verify`                      | Super Admin                         | FR-HOSP-001 |                                                                                                                                                    |
+| `GET /hospitals`                                   | Super Admin                         | §3.1        |                                                                                                                                                    |
+| `GET /hospitals/:id`                               | Super Admin, own Hospital Admin     | §3.1        |                                                                                                                                                    |
+| `PATCH /hospitals/:id`                             | Super Admin, own Hospital Admin     | §3.1        | Added in Phase 4 — hospital settings update; a non-owning Hospital Admin gets 404, not 403 (SEC-TENANT-004)                                       |
+| `GET /hospitals/:id/departments`                   | Hospital staff (own)                | FR-HOSP-002 |                                                                                                                                                    |
+| `POST /hospitals/:id/departments`                  | Hospital Admin (own)                | FR-HOSP-002 |                                                                                                                                                    |
+| `PATCH /hospitals/:id/departments/:departmentId`   | Hospital Admin (own)                | FR-HOSP-002 | Added in Phase 4                                                                                                                                  |
+| `DELETE /hospitals/:id/departments/:departmentId`  | Hospital Admin (own)                | FR-HOSP-002 | Added in Phase 4 — blocked (400) while doctors/staff/rooms are still assigned to the department                                                  |
+| `POST /users` (staff provisioning)                 | Hospital Admin (own)                | FR-HOSP-002 |                                                                                                                                                    |
+| `GET /users/:id`                                   | Self or Admin (own hospital)        | §3.2        |                                                                                                                                                    |
+| `POST /patients` (front-desk registration)         | Receptionist, Hospital Admin (own)  | FR-HOSP-004 | Added in Phase 4 — pre-verified account, unusable random password + forced reset email, same pattern as staff provisioning                       |
+| `GET /patients?search=`                            | Hospital staff (own)                | §3.2        | Added in Phase 4 — a `PATIENT` caller always gets an empty directory; own profile is read only via `GET /patients/:id`                            |
+| `GET /patients/:id`                                | Self (own), hospital staff (own)    | §3.2        | Added in Phase 4                                                                                                                                  |
 
 ### 4.3 Doctors & Availability
 
-| Method + Path                               | Auth                             | FR              |
-| ------------------------------------------- | -------------------------------- | --------------- |
-| `GET /doctors?hospitalId=&specialisation=`  | Any authenticated (own hospital) | §3.3            |
-| `POST /doctors` (profile creation)          | Hospital Admin (own)             | FR-HOSP-003     |
-| `GET /doctors/:id/availability`             | Any authenticated (own hospital) | FR-APPT-001/002 |
-| `PUT /doctors/:id/availability`             | Doctor (self)                    | FR-APPT-001     |
-| `POST /doctors/:id/availability-exceptions` | Doctor (self)                    | FR-APPT-001     |
+| Method + Path                               | Auth                              | FR               | Notes                                                                                                                                    |
+| --------------------------------------------- | ----------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /doctors?specialization=`               | Any authenticated (own hospital)  | §3.3             | `hospitalId` is deliberately not accepted as a query param — only the caller's own JWT hospitalId is honoured (SEC-AUTHZ-003)            |
+| `POST /doctors` (profile creation)          | Hospital Admin (own)              | FR-HOSP-003      |                                                                                                                                           |
+| `GET /doctors/:id`                           | Any authenticated (own hospital)  | §3.3             | Added in Phase 4                                                                                                                         |
+| `GET /doctors/:id/availability`             | Any authenticated (own hospital)  | FR-APPT-001/002  |                                                                                                                                           |
+| `PUT /doctors/:id/availability`             | Doctor (self)                     | FR-APPT-001      |                                                                                                                                           |
+| `POST /doctors/:id/availability-exceptions` | Doctor (self)                     | FR-APPT-001      |                                                                                                                                           |
 
 ### 4.4 Appointments
 

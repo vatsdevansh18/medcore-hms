@@ -9,6 +9,7 @@ import { Roles } from "../src/auth/decorators/roles.decorator";
 import { PRISMA_CLIENT } from "../src/prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../src/prisma/prisma-client.factory";
 import { TenantContext } from "../src/common/tenancy/tenant-context";
+import { configureApp } from "../src/common/bootstrap/configure-app";
 
 /** Minimal DOCTOR-only route, registered only in this test module, to prove
  * RolesGuard's role-mismatch enforcement against a real restricted route —
@@ -52,9 +53,7 @@ describe("Auth (e2e)", () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix("api", { exclude: ["health", "health/ready"] });
-    const cookieParser = (await import("cookie-parser")).default;
-    app.use(cookieParser());
+    configureApp(app);
     await app.init();
 
     prisma = app.get(PRISMA_CLIENT);

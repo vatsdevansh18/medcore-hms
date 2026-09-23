@@ -122,9 +122,16 @@ export class AuthService {
   }
 
   async sendPhoneOtp(userId: string, hospitalId: string | null): Promise<void> {
-    const user = await TenantContext.run({ hospitalId, userId, bypassTenancy: false }, () =>
-      this.prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+    const user = await TenantContext.runForCaller({ hospitalId, sub: userId }, () =>
+      this.prisma.user.findUnique({ where: { id: userId } }),
     );
+    if (!user) {
+      throw new AppException(
+        ApiErrorCode.UNAUTHENTICATED,
+        "Account not found.",
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
     if (!user.phone) {
       throw new AppException(
         ApiErrorCode.VALIDATION_ERROR,
@@ -137,7 +144,7 @@ export class AuthService {
 
   async verifyPhone(userId: string, hospitalId: string | null, code: string): Promise<void> {
     await this.otpService.verify("phone", userId, code);
-    await TenantContext.run({ hospitalId, userId, bypassTenancy: false }, () =>
+    await TenantContext.runForCaller({ hospitalId, sub: userId }, () =>
       this.prisma.user.update({ where: { id: userId }, data: { phoneVerifiedAt: new Date() } }),
     );
   }
@@ -178,9 +185,8 @@ export class AuthService {
       device,
     );
 
-    await TenantContext.run(
-      { hospitalId: user.hospitalId, userId: user.id, bypassTenancy: false },
-      () => this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
+    await TenantContext.runForCaller({ hospitalId: user.hospitalId, sub: user.id }, () =>
+      this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
     );
 
     return tokens;
@@ -195,8 +201,8 @@ export class AuthService {
   }
 
   async me(userId: string, hospitalId: string | null) {
-    return TenantContext.run({ hospitalId, userId, bypassTenancy: false }, () =>
-      this.prisma.user.findUniqueOrThrow({
+    const user = await TenantContext.runForCaller({ hospitalId, sub: userId }, () =>
+      this.prisma.user.findUnique({
         where: { id: userId },
         select: {
           id: true,
@@ -213,5 +219,13 @@ export class AuthService {
         },
       }),
     );
+    if (!user) {
+      throw new AppException(
+        ApiErrorCode.UNAUTHENTICATED,
+        "Account not found.",
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    return user;
   }
 }

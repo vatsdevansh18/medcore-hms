@@ -60,6 +60,7 @@ Each FR/NFR below states **Requirement**, **Rationale** (why, tied to the brief 
 - **FR-HOSP-001** — Super Admin creates and verifies new hospital tenants; a hospital is `PENDING_VERIFICATION` until approved.
 - **FR-HOSP-002** — Hospital Admin manages departments, rooms/beds, and staff accounts within their own hospital only.
 - **FR-HOSP-003** — Doctor profiles capture specialisation, licence number, qualification, consultation fee, and digital signature asset.
+- **FR-HOSP-004** — Receptionists (and Hospital Admins) register a patient at the front desk within their own hospital; the account is pre-verified and provisioned the same way as staff accounts (`FR-HOSP-002`) — a random, never-disclosed password plus a forced password-reset email, not a public self-registration flow. Added in Phase 4 (`docs/phase-reviews/PHASE-4-REVIEW.md`); not in the brief's original FR list but required to satisfy the brief's own "Receptionist" role scope (`01-PRD.md`), logged in `11-DECISIONS.md`.
 
 ### 2.4 Appointments & Scheduling (`FR-APPT`)
 

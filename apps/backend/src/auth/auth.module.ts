@@ -35,6 +35,6 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
   // (SEC-AUTHZ-002) — they have no AuthModule-specific dependencies (just
   // Reflector), so they live in src/auth/guards/ but are wired as
   // APP_GUARD providers in app.module.ts, not here.
-  exports: [TokenService],
+  exports: [TokenService, PasswordResetService],
 })
 export class AuthModule {}

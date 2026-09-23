@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { stdSerializers } from "pino";
 import type { Params } from "nestjs-pino";
 
 /**
@@ -38,6 +39,13 @@ export function buildLoggerConfig(nodeEnv: string, logLevel: string): Params {
         paths: SENSITIVE_FIELD_PATHS,
         censor: "[REDACTED]",
       },
+      // Error.message/.stack are non-enumerable, so pino's default
+      // JSON-serialization of a raw `err` object silently drops them,
+      // leaving only whatever extra enumerable props the thrown class set
+      // (e.g. Prisma errors' `clientVersion`) — found while debugging a
+      // 500 in Phase 4 where the logged error carried no message at all.
+      // See docs/phase-reviews/PHASE-4-REVIEW.md.
+      serializers: { err: stdSerializers.err },
       transport:
         nodeEnv === "production"
           ? undefined

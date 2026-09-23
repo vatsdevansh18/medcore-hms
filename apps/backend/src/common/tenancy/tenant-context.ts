@@ -72,4 +72,28 @@ export class TenantContext {
   static async bypass<T>(callback: () => Promise<T>): Promise<T> {
     return this.run({ hospitalId: null, userId: null, bypassTenancy: true }, callback);
   }
+
+  /**
+   * For a self-referential operation — the caller reading/updating their
+   * OWN row (e.g. `/auth/me`, profile updates). `SUPER_ADMIN` always has
+   * `hospitalId: null`, and `bypassTenancy: false` + a null hospitalId is
+   * always (correctly) rejected by the tenant-scoping extension — so a
+   * naive `TenantContext.run({hospitalId: caller.hospitalId, ...})` breaks
+   * for every Super Admin self-access. Found in Phase 4 (login/`/auth/me`
+   * were broken for the seeded Super Admin account — no Phase 3 test used
+   * that role). Falls back to `bypass()` when there's no tenant to scope
+   * to; a caller accessing their own row is never a real cross-tenant risk.
+   */
+  static async runForCaller<T>(
+    caller: { hospitalId: string | null; sub: string },
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    if (caller.hospitalId === null) {
+      return this.bypass(callback);
+    }
+    return this.run(
+      { hospitalId: caller.hospitalId, userId: caller.sub, bypassTenancy: false },
+      callback,
+    );
+  }
 }

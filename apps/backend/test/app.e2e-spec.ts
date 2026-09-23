@@ -2,6 +2,7 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { type INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
+import { configureApp } from "../src/common/bootstrap/configure-app";
 
 describe("Health (e2e)", () => {
   let app: INestApplication;
@@ -12,7 +13,7 @@ describe("Health (e2e)", () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix("api", { exclude: ["health", "health/ready"] });
+    configureApp(app);
     await app.init();
   });
 

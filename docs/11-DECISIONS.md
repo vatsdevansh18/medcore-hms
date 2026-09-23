@@ -174,3 +174,15 @@ Each entry: context, alternatives considered, decision, rationale, consequences.
 **Rationale:** Splitting storage between two providers for the same category of sensitive file multiplies the security surface (two sets of access controls, two audit trails) for no functional benefit; S3 alone satisfies every storage requirement in the brief, and the deployment architecture section names S3 specifically for production.
 
 **Consequences:** Cloudinary integration is optional and can be skipped entirely without any functional loss; if skipped, this is noted in the relevant phase review, not treated as a defect.
+
+---
+
+## D-013 — Front-desk patient registration provisioned identically to staff accounts (new `FR-HOSP-004`)
+
+**Context:** The brief specifies a Receptionist role responsible for patient registration/check-in, but `02-SRS.md`'s original `FR-HOSP` list (written in Phase 0, before the auth flows existed) only covers Super Admin/Hospital Admin/Doctor provisioning — it never defined how a Receptionist actually creates a patient record for a walk-in patient who isn't self-registering online.
+
+**Decision:** `POST /patients` reuses the exact admin-provisioning pattern `FR-HOSP-002` already established for staff: the account is created pre-verified, given a random unusable password, and immediately sent a password-reset email so the patient sets their own real password. Formalized as `FR-HOSP-004` in `02-SRS.md` rather than left as an undocumented Phase 4 addition.
+
+**Rationale:** A walk-in patient has no email-OTP loop to complete at the front desk the way a self-registering online patient does (`FR-AUTH-001`); reusing the already-built, already-tested `PasswordResetService` flow avoids inventing a second "invite" mechanism for what is functionally the same problem `FR-HOSP-002` already solved for staff.
+
+**Consequences:** `docs/08-API-CONTRACT.md` §4.2 documents `POST /patients`/`GET /patients`/`GET /patients/:id` under this ID; `docs/phase-reviews/PHASE-4-REVIEW.md` records the implementation and its test coverage.
