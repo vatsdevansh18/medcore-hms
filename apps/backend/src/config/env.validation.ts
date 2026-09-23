@@ -28,6 +28,9 @@ export class EnvironmentVariables {
 
   @IsString()
   CORS_ORIGIN: string = "http://localhost:3000";
+
+  @IsString()
+  DATABASE_URL!: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

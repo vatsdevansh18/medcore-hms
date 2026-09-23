@@ -8,7 +8,7 @@
 
 - Normalised to 3NF; no repeated-group columns, no JSON used as a substitute for a proper relation (JSON is used only for genuinely schemaless data: structured lab result parameters, sanitised webhook payloads, before/after audit diffs).
 - Every hospital-scoped table carries `hospitalId` — a table without one is either global (Hospital itself, platform-level lookups) or explicitly justified below.
-- Soft delete (`deletedAt timestamptz null`) on entities with legal/clinical retention requirements: `Patient`, `DoctorProfile`, `Appointment`, `Medicine`. Everything else may hard-delete only if it has no clinical or financial history dependency.
+- Soft delete (`deletedAt timestamptz null`) on entities with legal/clinical retention requirements: `User`, `Patient`, `DoctorProfile`, `Appointment`, `Medicine`. Everything else may hard-delete only if it has no clinical or financial history dependency.
 - Every table has `id` (UUID, default `gen_random_uuid()`), `createdAt`, `updatedAt`; timestamps are `timestamptz`, never naive.
 - Minimum indexing rule (per brief §5 hint): `hospitalId`, `patientId`, `doctorId`, and any date/status column that appears in a `WHERE` clause are indexed. Composite indexes are added for the specific hot queries named per-entity below.
 
@@ -333,7 +333,8 @@ erDiagram
 - **Doctor availability model:** recurring weekly pattern (`DoctorAvailability`, keyed by `dayOfWeek`) plus a small `DoctorAvailabilityException` table for date-specific overrides (leave, holidays, one-off extra hours) — not individually materialised slot rows. Slots are computed on read (cheap, cacheable) rather than pre-generated and stored, which would require a background job to keep in sync and would explode row counts. Trade-off accepted and documented in `11-DECISIONS.md` D-009.
 - **Prescription ↔ Medicine many-to-many:** resolved via `PrescriptionItem`, which is where dosage/frequency/duration/instructions live — exactly as the brief's hint frames it.
 - **Lab results:** hybrid, per the brief's suggested options — structured `parameter/value/unit/flag` JSON array for values the system can range-check automatically, plus an optional `reportFileUrl` for a PDF/scan when a structured breakdown isn't practical (e.g. imaging-adjacent reports). This is the hybrid approach the brief explicitly calls out as a valid design.
-- **Soft delete scope:** limited to `Patient`, `DoctorProfile`, `Appointment`, `Medicine` — entities with legal/clinical/financial retention weight. Staff accounts, notifications, and audit logs use hard delete or retention-by-policy where soft delete would add no value.
+- **Soft delete scope:** limited to `User`, `Patient`, `DoctorProfile`, `Appointment`, `Medicine` — entities with legal/clinical/financial retention weight. Other tables use hard delete or retention-by-policy where soft delete would add no value.
+- **`AuditLog.actorUserId` is nullable**, representing system-triggered writes (seed scripts, background jobs) with no human actor — distinct from `hospitalId` being nullable, which represents platform-level (Super Admin) actions with no tenant.
 - **Address reuse:** one `Address` table referenced by `Hospital` and `PatientProfile` (and future supplier records), rather than embedded address columns duplicated per table, per the brief's explicit hint.
 
 ## 5. Migration & Seed Strategy

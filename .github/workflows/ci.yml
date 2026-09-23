@@ -105,10 +105,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Apply database migrations
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: postgresql://medcore:medcore@localhost:5432/medcore_hms_test
+        run: pnpm exec prisma migrate deploy
+
       - name: Run integration (e2e) tests
         working-directory: apps/backend
         env:
           DATABASE_URL: postgresql://medcore:medcore@localhost:5432/medcore_hms_test
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
-        run: pnpm run test:e2e
+        run: pnpm exec jest --config ./test/jest-e2e.json

@@ -1,16 +1,19 @@
 import { Controller, Get } from "@nestjs/common";
 import { HealthCheck, HealthCheckService } from "@nestjs/terminus";
+import { DatabaseHealthIndicator } from "./database.health-indicator";
 
 /**
  * Liveness/readiness probes — see docs/02-SRS.md NFR-AVAIL-001.
- * `/health` reports process liveness only. `/health/ready` will additionally
- * check downstream dependencies (Postgres, Redis) once those are wired up in
- * Phase 2; until then it intentionally mirrors liveness rather than faking a
- * dependency check that doesn't exist yet.
+ * `/health` reports process liveness only. `/health/ready` additionally
+ * checks Postgres connectivity (wired up in Phase 2); Redis joins this check
+ * once it's actually consumed by the application (Phase 3 sessions).
  */
 @Controller("health")
 export class HealthController {
-  constructor(private readonly health: HealthCheckService) {}
+  constructor(
+    private readonly health: HealthCheckService,
+    private readonly db: DatabaseHealthIndicator,
+  ) {}
 
   @Get()
   @HealthCheck()
@@ -21,6 +24,6 @@ export class HealthController {
   @Get("ready")
   @HealthCheck()
   readiness() {
-    return this.health.check([]);
+    return this.health.check([() => this.db.isHealthy("database")]);
   }
 }

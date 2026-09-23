@@ -1,5 +1,10 @@
 # syntax=docker/dockerfile:1
 FROM node:20-alpine AS base
+# Prisma's query engine binary needs a real libssl present — node:20-alpine's
+# base image doesn't include it, which surfaces as a runtime crash
+# ("Error loading shared library libssl.so.1.1") that's easy to miss until
+# the container actually receives its first query, not at build time.
+RUN apk add --no-cache openssl
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /workspace
 
@@ -19,6 +24,13 @@ COPY apps/backend apps/backend
 # @medcore/types is consumed as compiled JS (see packages/types/package.json) — build it
 # once into the image; apps/backend's own source is bind-mounted for hot reload instead.
 RUN pnpm --filter=@medcore/types run build
+# The Prisma Client generated during `pnpm install` (deps stage) has no schema
+# to generate against yet — schema.prisma only arrives with this COPY. Without
+# an explicit generate here, the client in node_modules is a schema-less stub
+# (e.g. missing Prisma.ModelName, per-model delegates) and every model-typed
+# import fails to compile — found running this exact image, see
+# docs/phase-reviews/PHASE-2-REVIEW.md.
+RUN pnpm --filter=@medcore/backend exec prisma generate
 EXPOSE 3001
 CMD ["pnpm", "--filter=@medcore/backend", "run", "dev"]
 
@@ -27,6 +39,7 @@ FROM deps AS build
 COPY packages/types packages/types
 COPY packages/config packages/config
 COPY apps/backend apps/backend
+RUN pnpm --filter=@medcore/backend exec prisma generate
 RUN pnpm -r --if-present run build
 
 # ---- runtime: minimal production image (used from Phase 16 onward) ----

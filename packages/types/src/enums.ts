@@ -132,3 +132,52 @@ export enum NotificationStatus {
   SENT = "SENT",
   FAILED = "FAILED",
 }
+
+/** A patient's self-identified gender. Distinct from ReferenceRangeGender. */
+export enum Gender {
+  MALE = "MALE",
+  FEMALE = "FEMALE",
+  OTHER = "OTHER",
+}
+
+/** The gender bucket a lab reference range applies to — not a person's gender. */
+export enum ReferenceRangeGender {
+  MALE = "MALE",
+  FEMALE = "FEMALE",
+  ANY = "ANY",
+}
+
+export enum RoomType {
+  GENERAL = "GENERAL",
+  PRIVATE = "PRIVATE",
+  ICU = "ICU",
+  OT = "OT",
+}
+
+export enum BedStatus {
+  VACANT = "VACANT",
+  OCCUPIED = "OCCUPIED",
+  MAINTENANCE = "MAINTENANCE",
+}
+
+export enum FamilyHistoryCondition {
+  DIABETES = "DIABETES",
+  HYPERTENSION = "HYPERTENSION",
+  CANCER = "CANCER",
+  CARDIAC = "CARDIAC",
+  OTHER = "OTHER",
+}
+
+export enum AttachmentOwnerType {
+  MEDICAL_RECORD = "MEDICAL_RECORD",
+  LAB_RESULT = "LAB_RESULT",
+  PRESCRIPTION = "PRESCRIPTION",
+}
+
+/** Data model only in v1 — no adjudication workflow (see docs/11-DECISIONS.md D-011). */
+export enum InsuranceClaimStatus {
+  SUBMITTED = "SUBMITTED",
+  APPROVED = "APPROVED",
+  REJECTED = "REJECTED",
+  PAID = "PAID",
+}
