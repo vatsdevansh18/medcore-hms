@@ -106,7 +106,7 @@ Full parameter/DTO detail lives in Swagger (generated in Phase 3+ from `@nestjs/
 | `GET /doctors?specialization=`               | Any authenticated (own hospital)  | §3.3             | `hospitalId` is deliberately not accepted as a query param — only the caller's own JWT hospitalId is honoured (SEC-AUTHZ-003)            |
 | `POST /doctors` (profile creation)          | Hospital Admin (own)              | FR-HOSP-003      |                                                                                                                                           |
 | `GET /doctors/:id`                           | Any authenticated (own hospital)  | §3.3             | Added in Phase 4                                                                                                                         |
-| `GET /doctors/:id/availability`             | Any authenticated (own hospital)  | FR-APPT-001/002  |                                                                                                                                           |
+| `GET /doctors/:id/availability`             | HA/Nurse/Receptionist/Patient (own hospital), Doctor (self only) | FR-APPT-001/002  | §3.3 gives Doctor "self" specifically, narrower than the other roles' "own hospital" |
 | `PUT /doctors/:id/availability`             | Doctor (self)                     | FR-APPT-001      |                                                                                                                                           |
 | `POST /doctors/:id/availability-exceptions` | Doctor (self)                     | FR-APPT-001      |                                                                                                                                           |
 

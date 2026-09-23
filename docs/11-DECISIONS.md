@@ -186,3 +186,15 @@ Each entry: context, alternatives considered, decision, rationale, consequences.
 **Rationale:** A walk-in patient has no email-OTP loop to complete at the front desk the way a self-registering online patient does (`FR-AUTH-001`); reusing the already-built, already-tested `PasswordResetService` flow avoids inventing a second "invite" mechanism for what is functionally the same problem `FR-HOSP-002` already solved for staff.
 
 **Consequences:** `docs/08-API-CONTRACT.md` §4.2 documents `POST /patients`/`GET /patients`/`GET /patients/:id` under this ID; `docs/phase-reviews/PHASE-4-REVIEW.md` records the implementation and its test coverage.
+
+---
+
+## D-014 — D-009's Redis caching of computed availability deferred past Phase 5, not implemented
+
+**Context:** D-009 decided that computed availability slots would be "cached in Redis with a 60-second TTL," and its Consequences committed to unit test coverage of the slot-computation logic "in Phase 5." Phase 5 shipped `AvailabilityService.computeAvailability` fully uncached (every call recomputes from `DoctorAvailability`/`DoctorAvailabilityException`/`Appointment` rows) and covered only by e2e tests (`appointments.e2e-spec.ts`), not isolated unit tests.
+
+**Decision:** Ship Phase 5 without the caching layer, and record this explicitly rather than let D-009 silently misstate what's running. The e2e coverage is treated as satisfying D-009's underlying intent (proving slot computation is correct against exceptions and existing bookings) even though it isn't literally the promised unit tests, because it exercises the same logic against a real database rather than mocks.
+
+**Rationale:** `computeAvailability` is called from two places with different risk profiles: the read-only `GET .../availability` endpoint (where D-009's 60-second staleness is exactly the intended, accepted trade-off) and `AppointmentsService.book()`'s own pre-insert `isOpenSlot` re-check (where a stale cache widens — from near-zero to up to 60s — the window in which a client is told a slot is open when it was in fact just taken). The DB-level exclusion constraint (`D-005`) remains the authoritative guard either way, so a stale pre-check cannot cause a double-booking, only an occasional spurious 409 on an otherwise-valid-looking request. Adding a shared cache to a code path this concurrency-sensitive, without dedicated tests proving the interaction between the 60-second TTL and the mandatory concurrent-booking gate, was judged higher-risk than shipping the (already fully correct, DB-verified) uncached version and deferring the optimization.
+
+**Consequences:** `GET .../availability` recomputes on every call — acceptable at Phase 5's scale, but worth revisiting if doctor-availability reads become a measured hot path later. Any future implementation should either cache only the read endpoint's response (leaving `book()`'s internal call uncached) or add a concurrency test that specifically exercises a cached-and-stale `isOpenSlot` check before caching the shared method. Tracked as known technical debt in `docs/phase-reviews/PHASE-5-REVIEW.md` rather than left as an undocumented gap against D-009.

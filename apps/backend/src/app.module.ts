@@ -13,6 +13,8 @@ import { HospitalsModule } from "./hospitals/hospitals.module";
 import { UsersModule } from "./users/users.module";
 import { DoctorsModule } from "./doctors/doctors.module";
 import { PatientsModule } from "./patients/patients.module";
+import { QueueModule } from "./queue/queue.module";
+import { AppointmentsModule } from "./appointments/appointments.module";
 import { JwtAuthGuard } from "./auth/guards/jwt-auth.guard";
 import { RolesGuard } from "./auth/guards/roles.guard";
 import { AppThrottlerGuard } from "./common/throttler/app-throttler.guard";
@@ -59,6 +61,8 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
     UsersModule,
     DoctorsModule,
     PatientsModule,
+    QueueModule,
+    AppointmentsModule,
   ],
   providers: [
     // Order matters: throttling and authentication happen before RBAC, and
