@@ -159,6 +159,7 @@ erDiagram
         uuid doctorId FK
         string chiefComplaint
         string presentingSymptoms
+        string diagnosisNotes "free text, FR-EMR-004; added Phase 6 gap-fix"
         string_array confirmedDiagnosisIcd10
         text treatmentPlan
         bytea notesEncrypted "app-level AES-256-GCM, see 09-SECURITY.md"

@@ -29,6 +29,26 @@ services:
       timeout: 5s
       retries: 10
 
+  # Local S3-compatible endpoint for dev/test only (docs/11-DECISIONS.md
+  # D-015). Real AWS S3 remains the production target (D-012); the backend's
+  # S3Service points at this via the optional S3_ENDPOINT env var, unset in
+  # production so the AWS SDK talks to real S3 instead.
+  localstack:
+    image: localstack/localstack:3
+    restart: unless-stopped
+    environment:
+      SERVICES: s3
+      DEFAULT_REGION: ${AWS_REGION:-ap-south-1}
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
   api:
     build:
       context: .
@@ -39,12 +59,17 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-medcore}:${POSTGRES_PASSWORD:-medcore}@postgres:5432/${POSTGRES_DB:-medcore_hms}
       REDIS_URL: redis://redis:6379
+      # Container-network hostname, not localhost:4566 — .env's value (for the
+      # native dev path) is overridden here the same way DATABASE_URL/REDIS_URL are.
+      S3_ENDPOINT: http://localstack:4566
     ports:
       - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      localstack:
         condition: service_healthy
     volumes:
       - ./apps/backend/src:/workspace/apps/backend/src
@@ -82,3 +107,4 @@ services:
 
 volumes:
   postgres_data:
+  localstack_data:

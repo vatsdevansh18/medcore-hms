@@ -62,6 +62,29 @@ export class EnvironmentVariables {
   @Min(10)
   @Max(15)
   BCRYPT_COST_FACTOR: number = 12;
+
+  // Phase 6: field encryption (docs/11-DECISIONS.md D-008) — 64 hex chars = 32 bytes, AES-256.
+  @IsString()
+  @Matches(/^[0-9a-f]{64}$/i, { message: "ENCRYPTION_KEY must be 64 hex characters (32 bytes)." })
+  ENCRYPTION_KEY!: string;
+
+  // Phase 6: file storage (docs/03-ARCHITECTURE.md §10, docs/11-DECISIONS.md D-012/D-015).
+  @IsString()
+  AWS_REGION: string = "ap-south-1";
+
+  @IsString()
+  AWS_ACCESS_KEY_ID: string = "test";
+
+  @IsString()
+  AWS_SECRET_ACCESS_KEY: string = "test";
+
+  @IsString()
+  AWS_S3_BUCKET: string = "medcore-hms-attachments";
+
+  // Empty in production (real AWS); set to a LocalStack URL in dev/test.
+  @IsString()
+  @IsOptional()
+  S3_ENDPOINT: string = "";
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

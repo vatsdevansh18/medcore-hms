@@ -543,6 +543,11 @@ model MedicalRecord {
   doctor                  DoctorProfile  @relation(fields: [doctorId], references: [id])
   chiefComplaint          String?
   presentingSymptoms      String?
+  /// Free-text diagnosis — docs/02-SRS.md FR-EMR-004 requires free text
+  /// *plus* an optional ICD-10 code array; the ICD-10 array alone (below)
+  /// doesn't satisfy the free-text half. Added in Phase 6 as a documented
+  /// gap-fix against the Phase 2 schema — see docs/phase-reviews/PHASE-6-REVIEW.md.
+  diagnosisNotes          String?
   confirmedDiagnosisIcd10 String[]
   treatmentPlan           String?
   notesEncrypted          Bytes?
