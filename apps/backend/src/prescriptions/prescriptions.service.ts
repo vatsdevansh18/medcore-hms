@@ -1,4 +1,5 @@
 import { HttpStatus, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { ApiErrorCode, NotificationType, PrescriptionStatus, UserRole } from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
@@ -204,27 +205,57 @@ export class PrescriptionsService {
     return toPrescriptionView(await this.getForView(id, caller));
   }
 
-  /** FR-PORTAL-001: the calling patient's own prescriptions, newest first.
-   * Patient-only for now; staff work queues are Phase 13 (D-035). */
-  async findMine(query: FindPrescriptionsQueryDto, caller: AuthenticatedUser) {
-    if (caller.role !== UserRole.PATIENT || !caller.hospitalId) {
-      return PaginatedResult.of([], 0, query.page, query.limit);
-    }
-    return TenantContext.run({ hospitalId: caller.hospitalId, userId: caller.sub, bypassTenancy: false }, async () => {
-      const patient = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
-      if (!patient) return PaginatedResult.of([], 0, query.page, query.limit);
-      const where = { patientId: patient.id, ...(query.status ? { status: query.status } : {}) };
+  /**
+   * `GET /prescriptions`:
+   * - PATIENT: their own, newest first (FR-PORTAL-001, D-035);
+   * - PHARMACIST: the hospital's dispensing queue, oldest first (Phase 13);
+   * - DOCTOR: prescriptions they wrote, newest first.
+   * Staff rows carry the patient's name; nobody gets storage keys (D-036).
+   */
+  async findAll(query: FindPrescriptionsQueryDto, caller: AuthenticatedUser) {
+    if (!caller.hospitalId) return PaginatedResult.of([], 0, query.page, query.limit);
+    const hospitalId = caller.hospitalId;
+    return TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, async () => {
+      const where: Prisma.PrescriptionWhereInput = {
+        hospitalId,
+        ...(query.status ? { status: { in: query.status } } : {}),
+      };
+      let orderBy: Prisma.PrescriptionOrderByWithRelationInput[] = [{ createdAt: "desc" }, { id: "asc" }];
+      if (caller.role === UserRole.PATIENT) {
+        const patient = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
+        if (!patient) return PaginatedResult.of([], 0, query.page, query.limit);
+        where.patientId = patient.id;
+      } else if (caller.role === UserRole.DOCTOR) {
+        const doctor = await this.prisma.doctorProfile.findUnique({ where: { userId: caller.sub } });
+        if (!doctor) return PaginatedResult.of([], 0, query.page, query.limit);
+        where.doctorId = doctor.id;
+      } else if (caller.role === UserRole.PHARMACIST) {
+        orderBy = [{ createdAt: "asc" }, { id: "asc" }];
+      } else {
+        return PaginatedResult.of([], 0, query.page, query.limit);
+      }
+      const staff = caller.role !== UserRole.PATIENT;
       const [data, total] = await Promise.all([
         this.prisma.prescription.findMany({
           where,
-          orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+          orderBy,
           skip: query.skip,
           take: query.limit,
-          include: PRESCRIPTION_INCLUDE,
+          include: {
+            ...PRESCRIPTION_INCLUDE,
+            ...(staff
+              ? { patient: { select: { user: { select: { id: true, firstName: true, lastName: true } } } } }
+              : {}),
+          },
         }),
         this.prisma.prescription.count({ where }),
       ]);
-      return PaginatedResult.of(data.map(toPrescriptionView), total, query.page, query.limit);
+      const rows = data.map((row) => {
+        const { patient, ...rest } = row as typeof row & { patient?: { user: { id: string; firstName: string; lastName: string } | null } };
+        const view = toPrescriptionView(rest);
+        return staff ? { ...view, patient: patient?.user ?? null } : view;
+      });
+      return PaginatedResult.of(rows, total, query.page, query.limit);
     });
   }
 

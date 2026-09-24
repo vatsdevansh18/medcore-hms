@@ -70,7 +70,7 @@
 ## 9. Audit Logging (`SEC-AUDIT`)
 
 - **SEC-AUDIT-001** — Every create/update/delete of a domain entity is recorded in `AuditLog` with actor, action, entity type/id, timestamp, IP, and a before/after diff where the entity is mutable (append-only entities like `MedicalRecord` log the addendum event itself).
-- **SEC-AUDIT-002** — Audit logs are themselves tenant-scoped and readable by a Hospital Admin only for their own hospital; Super Admin sees platform-wide audit activity.
+- **SEC-AUDIT-002** — Audit logs are themselves tenant-scoped and readable by a Hospital Admin only for their own hospital; Super Admin sees platform-wide audit activity. Implemented in Phase 13 as `GET /audit-logs`, which returns who/what/which record/when only, never `beforeData`/`afterData` (they can hold clinical ciphertext and personal fields; `11-DECISIONS.md` D-040).
 - **SEC-AUDIT-003** — Audit logs are never mutated or deleted by application code; if retention limits are ever needed, they are enforced by a documented archival job, not ad hoc deletion.
 
 ## 10. File Upload Security (`SEC-FILE`)

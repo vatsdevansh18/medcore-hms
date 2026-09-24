@@ -584,8 +584,12 @@ describe("Patient Portal (e2e)", () => {
 
     it("rejects an invalid status filter (400) and staff callers (403)", async () => {
       await api().get("/api/prescriptions?status=NOPE").set(auth(patientToken)).expect(400);
-      await api().get("/api/prescriptions").set(auth(doctorToken)).expect(403);
       await api().get("/api/prescriptions").set(auth(receptionistToken)).expect(403);
+      // Phase 13 (D-040): a doctor lists the prescriptions they wrote, with the patient's name.
+      const doctorList = await api().get("/api/prescriptions").set(auth(doctorToken)).expect(200);
+      expect(doctorList.body.data.map((p: { id: string }) => p.id)).toContain(prescriptionId);
+      expect(doctorList.body.data[0].patient).toMatchObject({ firstName: "Portal" });
+      expect(doctorList.body.data[0].pdfUrl).toBeUndefined();
     });
 
     it("strips storage keys from the single-prescription read too, for every role", async () => {
@@ -642,7 +646,10 @@ describe("Patient Portal (e2e)", () => {
 
       const theirs = await api().get("/api/lab-orders").set(auth(otherPatientToken)).expect(200);
       expect(theirs.body.data.map((o: { id: string }) => o.id)).not.toContain(orderId);
-      await api().get("/api/lab-orders").set(auth(doctorToken)).expect(403);
+      await api().get("/api/lab-orders").set(auth(receptionistToken)).expect(403);
+      // Phase 13 (D-040): the ordering doctor sees it in their own list.
+      const doctorList = await api().get("/api/lab-orders").set(auth(doctorToken)).expect(200);
+      expect(doctorList.body.data.map((o: { id: string }) => o.id)).toContain(orderId);
     });
 
     it("shows a result only once APPROVED, and hides the order from other patients (404)", async () => {

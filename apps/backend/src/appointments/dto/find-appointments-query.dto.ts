@@ -1,11 +1,13 @@
-import { IsDateString, IsIn, IsOptional } from "class-validator";
+import { IsDateString, IsIn, IsOptional, IsUUID } from "class-validator";
 import { AppointmentStatus } from "@medcore/types";
 import { PaginationQueryDto } from "../../common/pagination/pagination-query.dto";
+import { CommaSeparatedEnum } from "../../common/validation/comma-separated-enum.decorator";
 
 export class FindAppointmentsQueryDto extends PaginationQueryDto {
+  /** One or more statuses, comma-separated (Phase 13). */
   @IsOptional()
-  @IsIn(Object.values(AppointmentStatus))
-  status?: AppointmentStatus;
+  @CommaSeparatedEnum(Object.values(AppointmentStatus))
+  status?: AppointmentStatus[];
 
   @IsOptional()
   @IsDateString()
@@ -20,4 +22,10 @@ export class FindAppointmentsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(["asc", "desc"])
   sortOrder?: "asc" | "desc";
+
+  /** Front-desk and admin views filter by doctor (Phase 13). Ignored for a
+   * doctor or patient, whose own scope always applies. */
+  @IsOptional()
+  @IsUUID()
+  doctorId?: string;
 }

@@ -24,6 +24,7 @@ import { LabModule } from "./lab/lab.module";
 import { BillingModule } from "./billing/billing.module";
 import { MessagingModule } from "./common/messaging/messaging.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { AnalyticsModule } from "./analytics/analytics.module";
 import { JwtAuthGuard } from "./auth/guards/jwt-auth.guard";
 import { RolesGuard } from "./auth/guards/roles.guard";
 import { AppThrottlerGuard } from "./common/throttler/app-throttler.guard";
@@ -83,6 +84,7 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
     LabModule,
     BillingModule,
     NotificationsModule,
+    AnalyticsModule,
   ],
   providers: [
     // Order matters: throttling and authentication happen before RBAC, and

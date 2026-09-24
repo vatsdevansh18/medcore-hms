@@ -203,7 +203,7 @@ export class InvoicesService {
     if (caller.role === UserRole.PATIENT) return this.findMine(query, caller, hospitalId);
     return this.scoped(caller, hospitalId, async () => {
       const where = {
-        ...(query.status ? { status: query.status } : {}),
+        ...(query.status ? { status: { in: query.status } } : {}),
         ...(query.patientId ? { patientId: query.patientId } : {}),
         ...(query.appointmentId ? { appointmentId: query.appointmentId } : {}),
       };
@@ -213,10 +213,13 @@ export class InvoicesService {
           orderBy: [{ createdAt: "desc" }, { id: "asc" }],
           skip: query.skip,
           take: query.limit,
+          include: { patient: { select: { user: { select: { id: true, firstName: true, lastName: true } } } } },
         }),
         this.prisma.invoice.count({ where }),
       ]);
-      return PaginatedResult.of(data, total, query.page, query.limit);
+      // Staff work queues show who the bill is for (InvoiceQueueRow, Phase 13).
+      const rows = data.map(({ patient, ...invoice }) => ({ ...invoice, patient: patient.user }));
+      return PaginatedResult.of(rows, total, query.page, query.limit);
     });
   }
 
@@ -227,12 +230,14 @@ export class InvoicesService {
   private findMine(query: FindInvoicesQueryDto, caller: AuthenticatedUser, hospitalId: string) {
     return this.scoped(caller, hospitalId, async () => {
       const own = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
-      if (!own || query.status === InvoiceStatus.DRAFT) {
+      // A patient never sees DRAFTs, whatever the filter asks for.
+      const statuses = query.status?.filter((status) => status !== InvoiceStatus.DRAFT);
+      if (!own || (statuses && statuses.length === 0)) {
         return PaginatedResult.of([], 0, query.page, query.limit);
       }
       const where = {
         patientId: own.id,
-        status: query.status ?? { not: InvoiceStatus.DRAFT },
+        status: statuses ? { in: statuses } : { not: InvoiceStatus.DRAFT },
         ...(query.appointmentId ? { appointmentId: query.appointmentId } : {}),
       };
       const [data, total] = await Promise.all([

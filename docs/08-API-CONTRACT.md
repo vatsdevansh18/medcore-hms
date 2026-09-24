@@ -222,9 +222,28 @@ Which events notify whom, on which channels, is the trigger table in `docs/11-DE
 
 | Method + Path                                       | Auth                            | FR               |
 | --------------------------------------------------- | ------------------------------- | ---------------- |
-| `GET /analytics/revenue?from=&to=`                  | Admin / Accountant (own)        | FR-ANALYTICS-001 |
-| `GET /analytics/appointments?from=&to=`             | Admin / Doctor (own)            | FR-ANALYTICS-001 |
+| `GET /analytics/overview`                           | Hospital Admin (own), Super Admin (platform) | FR-ANALYTICS-001 |
+| `GET /analytics/revenue?from=&to=`                  | Hospital Admin / Accountant (own), Super Admin (platform) | FR-ANALYTICS-001 |
+| `GET /analytics/appointments?from=&to=`             | Hospital Admin (own), Doctor (own appointments), Super Admin (platform) | FR-ANALYTICS-001 |
+| `GET /analytics/occupancy`                          | Hospital Admin / Nurse (own)    | FR-ANALYTICS-001 |
 | `GET /search?q=&scope=patients\|doctors\|medicines` | Role-appropriate (own hospital) | FR-SEARCH-001    |
+| `GET /audit-logs?entityType=`                       | Hospital Admin (own), Super Admin (all) | §3.9 |
+| `GET /payments?status=&method=`                     | Accountant / Hospital Admin (own) | §3.8 |
+
+As built in Phase 13 (`11-DECISIONS.md` D-040; shapes in `packages/types/src/analytics.ts`):
+- `from`/`to` are `YYYY-MM-DD` calendar dates in the hospital's timezone (UTC for the platform view). The default is the last 7 days; a range covers at most 92 days; `from` after `to` or an impossible date → 400. Each day in the range appears once, zero-filled.
+- `overview` → `DashboardKpis`: today's non-cancelled appointments, distinct patients, SUCCEEDED payments, occupied/total beds, active doctors, plus `activeHospitals` for the platform.
+- `revenue` → `RevenueTrend`: per-day `collected` (SUCCEEDED payments, by method) and `invoiced` (finalized totals, never DRAFT/CANCELLED); `outstanding` is the current balance across FINALIZED and PARTIALLY_PAID invoices.
+- `occupancy` → `OccupancyView`: departments → rooms → beds with status counts. A Super Admin gets 403 (it's per hospital).
+- `search`: `q` 2–100 characters (trimmed); every term must match a field. Without `scope` → `GlobalSearchView` (top 5 and a total per allowed scope). With `scope` → a paginated hit list. A scope the role can't search → 403. Patients and Super Admin → 403.
+- `audit-logs` → `AuditLogView` rows (who, what, which record, when). `beforeData`/`afterData` are never returned.
+- `payments` → `PaymentListView` (explicit fields; no provider payload or reference). `status`/`method` accept comma-separated lists.
+- Changed in Phase 13 (all lists accept comma-separated `status`):
+  - `GET /lab-orders` adds Lab Technician (hospital queue, URGENT first, then oldest) and Doctor (own orders), with `status` (item status) and `priority` filters; staff rows carry the patient's name.
+  - `GET /prescriptions` adds Pharmacist (oldest first) and Doctor (own).
+  - `GET /appointments` adds `doctorId` (it narrows within the caller's own scope).
+  - `GET /invoices` staff rows carry the patient's name.
+  - `GET /patients` (directory list) excludes Lab Technician and Pharmacist, who get an empty list.
 
 ### 4.12 Health
 

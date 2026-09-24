@@ -36,10 +36,10 @@ function restoreSession(): Promise<void> {
   return bootstrap;
 }
 
-/** Where a signed-in user belongs: the portal for patients; staff tools
- * come in Phase 13 (docs/05-DEVELOPMENT-PLAN.md). */
+/** Where a signed-in user belongs: the portal for patients, the staff
+ * workspace (role dashboard) for everyone else. */
 export function homeFor(role: UserRole): string {
-  return role === UserRole.PATIENT ? ROUTES.portal : ROUTES.staff;
+  return role === UserRole.PATIENT ? ROUTES.portal : ROUTES.dashboard;
 }
 
 export function useAuth() {

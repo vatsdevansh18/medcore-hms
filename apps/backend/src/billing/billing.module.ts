@@ -9,6 +9,7 @@ import { PaymentsService } from "./payments/payments.service";
 import { PaymentWebhooksController } from "./payments/payment-webhooks.controller";
 import { PaymentsController } from "./payments/payments.controller";
 import { ReceiptsService } from "./payments/receipts.service";
+import { PaymentsQueryService } from "./payments/payments-query.service";
 import { CheckoutClient } from "./payments/checkout-client";
 import { PaymentWebhookVerifier } from "./payments/payment-webhook-verifier";
 
@@ -26,6 +27,7 @@ import { PaymentWebhookVerifier } from "./payments/payment-webhook-verifier";
     CheckoutClient,
     PaymentWebhookVerifier,
     ReceiptsService,
+    PaymentsQueryService,
   ],
   exports: [ChargesService],
 })

@@ -522,7 +522,8 @@ export class AppointmentsService {
 
   async findAll(query: FindAppointmentsQueryDto, caller: AuthenticatedUser) {
     const baseWhere: Record<string, unknown> = { deletedAt: null };
-    if (query.status) baseWhere.status = query.status;
+    if (query.status) baseWhere.status = { in: query.status };
+    if (query.doctorId) baseWhere.doctorId = query.doctorId;
     if (query.dateFrom || query.dateTo) {
       baseWhere.scheduledStart = {
         ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}),
@@ -553,7 +554,13 @@ export class AppointmentsService {
       const where = { ...baseWhere };
       if (caller.role === UserRole.DOCTOR) {
         const doctor = await this.prisma.doctorProfile.findUnique({ where: { userId: caller.sub } });
-        where.doctorId = doctor?.id ?? "__no_profile__";
+        const own = doctor?.id ?? "__no_profile__";
+        // A doctorId filter narrows within the doctor's own scope: asking for
+        // a colleague's appointments returns nothing, never your own.
+        if (query.doctorId && query.doctorId !== own) {
+          return PaginatedResult.of([], 0, query.page, query.limit);
+        }
+        where.doctorId = own;
       } else if (caller.role === UserRole.PATIENT) {
         const patient = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
         where.patientId = patient?.id ?? "__no_profile__";

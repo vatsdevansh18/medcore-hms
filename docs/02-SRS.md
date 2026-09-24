@@ -132,6 +132,8 @@ Phase 12 interpretation (`11-DECISIONS.md` D-035): "the hospital's policy" is `H
 - **FR-ANALYTICS-001** — Each role's dashboard surfaces the KPIs and widgets specified in `04-UI-UX.md` §Dashboard Patterns, computed from that role's own hospital scope (or platform-wide only for Super Admin).
 - **FR-SEARCH-001** — Global search across patients, doctors, and medicines is scoped to the caller's hospital, paginated, and debounced client-side to avoid request storms.
 
+Phase 13 interpretation (`11-DECISIONS.md` D-040): each role's search covers only what the RBAC matrix lets it see, and the Super Admin, who has no hospital, has no global search. The dashboards show read-only work queues until the Phase 13B staff screens (D-039); the Nurse medication-administration checklist is out of scope with inpatient medication records (D-007).
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Performance (`NFR-PERF`)

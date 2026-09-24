@@ -59,6 +59,12 @@ const LAB_OVERRIDES: Record<string, StatusStyle> = {
   IN_PROGRESS: { label: "Testing", tone: "info", icon: Loader },
 };
 
+/** Staff read an ISSUED prescription as issued, not "ready to collect"
+ * (which is the patient's wording). */
+const STAFF_RX_OVERRIDES: Record<string, StatusStyle> = {
+  ISSUED: { label: "Issued", tone: "info", icon: FileText },
+};
+
 /** Payment PENDING is not the appointment "awaiting confirmation". */
 const PAYMENT_OVERRIDES: Record<string, StatusStyle> = {
   PENDING: { label: "Processing", tone: "info", icon: Loader },
@@ -72,12 +78,20 @@ const TONES: Record<Tone, string> = {
   neutral: "bg-surface-muted text-muted",
 };
 
-export function statusStyle(status: string, kind?: "lab" | "payment"): StatusStyle {
-  const override = kind === "lab" ? LAB_OVERRIDES[status] : kind === "payment" ? PAYMENT_OVERRIDES[status] : undefined;
+export type StatusKind = "lab" | "payment" | "staff-rx";
+
+const OVERRIDES: Record<StatusKind, Record<string, StatusStyle>> = {
+  lab: LAB_OVERRIDES,
+  payment: PAYMENT_OVERRIDES,
+  "staff-rx": STAFF_RX_OVERRIDES,
+};
+
+export function statusStyle(status: string, kind?: StatusKind): StatusStyle {
+  const override = kind ? OVERRIDES[kind][status] : undefined;
   return override ?? STYLES[status] ?? { label: status.replace(/_/g, " ").toLowerCase(), tone: "neutral", icon: CircleDashed };
 }
 
-export function StatusBadge({ status, kind, className }: { status: string; kind?: "lab" | "payment"; className?: string }) {
+export function StatusBadge({ status, kind, className }: { status: string; kind?: StatusKind; className?: string }) {
   const style = statusStyle(status, kind);
   const Icon = style.icon;
   return (

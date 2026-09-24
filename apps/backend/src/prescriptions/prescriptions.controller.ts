@@ -20,11 +20,12 @@ export class PrescriptionsController {
     return this.prescriptionsService.create(dto, user);
   }
 
-  /** FR-PORTAL-001: a patient's own prescriptions (docs/11-DECISIONS.md D-035). */
-  @Roles(UserRole.PATIENT)
+  /** Patient: own (D-035). Pharmacist: the dispensing queue. Doctor: own
+   * prescriptions (Phase 13, D-040). */
+  @Roles(UserRole.PATIENT, UserRole.PHARMACIST, UserRole.DOCTOR)
   @Get()
-  findMine(@Query() query: FindPrescriptionsQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.prescriptionsService.findMine(query, user);
+  findAll(@Query() query: FindPrescriptionsQueryDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.prescriptionsService.findAll(query, user);
   }
 
   @Roles(...VIEW_ROLES)

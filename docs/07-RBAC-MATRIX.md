@@ -117,6 +117,7 @@ Receptionist, Lab Technician, Pharmacist, and Accountant have **no** direct read
 
 ## 4. Notes on 🟡 Scoping
 
+- Phase 13 (`11-DECISIONS.md` D-040): "Hospital-level analytics" is the overview, appointment trend, revenue, and occupancy endpoints. A Doctor sees their own appointment trend only (it backs their calendar), a Nurse reads the bed board (the "read bed status" cell in §3.1), and an Accountant gets revenue only ("financial only"). Global search follows §3.2 (patient directory), §3.3 (doctors), and §3.7 (medicines); Lab Technician and Pharmacist have no patient directory, in the list endpoint or in search. The staff work queues are the list form of each module's "view" row: Lab Technician (lab orders, whole hospital), Pharmacist (prescriptions, whole hospital), Doctor (their own lab orders and prescriptions), Accountant/Hospital Admin (payments).
 - Phase 12 (`11-DECISIONS.md` D-035): a Patient's "View invoice" covers finalized invoices only; a DRAFT is not yet shared and is 404 to its own patient. "View prescription" and "View result" for a Patient include list endpoints (`GET /prescriptions`, `GET /lab-orders`) scoped to the caller. The reschedule row's policy is `Hospital.patientRescheduleAllowed` plus a cutoff (`patientRescheduleCutoffHours` before the current start); emergency appointments can't be rescheduled.
 
 - "own hospital" means the guard additionally verifies `resource.hospitalId === caller.hospitalId`, sourced from the JWT — never trusts a `hospitalId` in the request body/query.

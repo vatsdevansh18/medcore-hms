@@ -65,12 +65,14 @@ test.describe("authentication", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("tells staff their workspace isn't in the web app yet, instead of showing the portal", async ({ page }) => {
+  test("sends staff to their own workspace instead of the portal", async ({ page }) => {
+    // Phase 13: staff land on their role dashboard (Phase 12 showed a notice).
     await signIn(page, fx.receptionistEmail);
-    await expect(page).toHaveURL(/\/staff$/);
-    await expect(page.getByText(/workspace isn.t available in the web app yet/)).toBeVisible();
+    await expect(page).toHaveURL(/\/dashboard$/);
     await page.goto("/portal");
-    await expect(page).toHaveURL(/\/staff$/);
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await page.goto("/staff");
+    await expect(page).toHaveURL(/\/dashboard$/);
   });
 
   test("registers a new patient and asks them to verify their email", async ({ page }) => {

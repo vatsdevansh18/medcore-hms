@@ -76,6 +76,12 @@ Folder structure and component strategy are detailed in `04-UI-UX.md`.
 - `useRealtime` connects to `/notifications` with the current token on every (re)connect and invalidates the affected queries when a notification arrives.
 - All times are shown in the hospital's timezone (from `/auth/me`), whatever the device's zone (D-037).
 
+**As implemented in Phase 13** (the staff workspace, D-040):
+- `app/(dashboard)/dashboard/*` shares the portal's `AppShell` (`components/modules/app-shell.tsx`). Navigation per role comes from `components/modules/staff-nav.ts`, and a page outside a role's navigation shows a plain refusal (`RoleGate`) instead of firing a request the API would reject.
+- `/dashboard` renders one dashboard per role, each loaded as its own chunk (`next/dynamic`), so only the roles with charts download Recharts (first load 122 kB, down from 304 kB).
+- Lists use the shared `DataTable` (sticky header, server pagination, loading/empty/error states) with filters kept in the URL (`useUrlFilters`), so dashboard "view all" links open pre-filtered lists.
+- Chart data transforms are plain functions (`lib/chart-data.ts`); every chart has a text summary in its `figcaption`.
+
 ## 3. Backend Architecture
 
 NestJS organised as one feature module per bounded context, each independently testable with no circular imports:

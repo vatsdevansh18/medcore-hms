@@ -109,6 +109,12 @@ Delivers: `FR-PORTAL-001..003`.
 Role-specific dashboards (Recharts), global search, filters, pagination.
 Delivers: `FR-ANALYTICS-001`, `FR-SEARCH-001`.
 
+### Phase 13B — Staff Workflow Screens _(added at the start of Phase 13, `11-DECISIONS.md` D-039)_
+
+The staff-facing screens for the workflows built backend-first in Phases 4–11: patient registration and scheduling (front desk), the doctor's encounter workspace (EMR, vitals, prescribing, lab ordering), lab result entry and four-eyes approval, pharmacy dispensing and stock receiving, the billing desk (draft lines, finalisation, cash payments), and hospital administration (departments, staff, reschedule policy). The Phase 13 dashboards and work-queue lists link into these screens.
+Delivers: the UI half of `FR-HOSP-*`, `FR-APPT-*`, `FR-EMR-*`, `FR-RX-*`, `FR-LAB-*`, `FR-PHARM-*`, `FR-BILL-*`, and the PRD §6 success criterion "complete the full patient journey" through the UI.
+Extra gate: a Playwright journey runs the full patient journey (registration → booking → encounter → prescription → lab → dispensing → invoice → payment → portal visibility) through the UI.
+
 ### Phase 14 — UI/UX Polish
 
 Design-system refinement pass across all screens against the `04-UI-UX.md` §9 checklist, responsive/accessibility pass, animation audit, performance pass (bundle size, render cost).
@@ -153,7 +159,8 @@ flowchart TD
     P10 --> P12
     P11 --> P12
     P12 --> P13[Phase 13: Analytics]
-    P13 --> P14[Phase 14: UI Polish]
+    P13 --> P13B[Phase 13B: Staff Workflow Screens]
+    P13B --> P14[Phase 14: UI Polish]
     P14 --> P15[Phase 15: Testing/Hardening]
     P15 --> P16[Phase 16: Deployment]
     P16 --> P17[Phase 17: Docs & Delivery]

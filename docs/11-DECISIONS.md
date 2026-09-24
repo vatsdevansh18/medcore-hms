@@ -557,3 +557,45 @@ Two Phase 9/10 channel choices change to match the brief:
 - **UI primitives** follow shadcn/ui's structure (`components/ui`, Radix-based) but were written by hand, because the shadcn CLI is interactive. Nothing in `components/ui` is feature-specific.
 
 **Rejected:** storing the access token in `localStorage` (readable by any injected script), and a Next.js API proxy (above).
+
+---
+
+## D-039 — A new Phase 13B for the staff workflow screens (Phase 13)
+
+**Context:** Phases 4–11 were built backend-first by design, and Phase 12 built the patient portal. No phase in `05-DEVELOPMENT-PLAN.md` builds the staff screens for those workflows: Phase 13 is dashboards, analytics, search, filters, and pagination, and Phase 14 polishes existing screens. The PRD's success criterion "complete the full patient journey" (§6) and the final quality gate (`12-QUALITY-PROTOCOL.md` §27, "every clinical/operational workflow … frontend UX") both need them. Found while scoping Phase 13; the user chose how to resolve it.
+
+**Decision:** Phase 13 stays as planned. A new **Phase 13B — Staff Workflow Screens** sits between Phase 13 and Phase 14, with its own gate (a full-journey Playwright test through the UI). It's "13B" rather than a renumbering so every existing "Phase 14/15/16/17" reference stays correct. Until 13B ships, the Phase 13 dashboards show read-only work queues, and rows don't link to workflow screens that don't exist yet.
+
+**Rejected (options put to the user):** folding the screens into Phase 13 (one gate two to three times Phase 12's size), folding them into Phase 14 (mixes building with polishing), and leaving staff on the API only (fails the PRD and the final gate).
+
+---
+
+## D-040 — Dashboards, analytics, search, and staff work queues (Phase 13)
+
+**Context:** FR-ANALYTICS-001 asks for role dashboards with the widgets in `04-UI-UX.md` §5; FR-SEARCH-001 asks for hospital-scoped, paginated global search. The API contract's §4.11 listed three endpoints without detail. Several widgets are work queues (lab orders by status, prescriptions to dispense, outstanding bills) that the Phase 7–10 list endpoints didn't serve for staff. The seed had no transactional history, so every dashboard would have been empty.
+
+**Decision:**
+- **Analytics endpoints** (`src/analytics/`), read-only:
+  - `GET /analytics/overview`: today's KPIs (Hospital Admin; Super Admin platform-wide);
+  - `GET /analytics/appointments?from&to`: daily counts by status (Hospital Admin, Doctor limited to their own, Super Admin);
+  - `GET /analytics/revenue?from&to`: collected, invoiced, and outstanding (Hospital Admin, Accountant as "financial only", Super Admin);
+  - `GET /analytics/occupancy`: the bed board (Hospital Admin, Nurse).
+- **Days are calendar days in the hospital's timezone** (UTC for the platform view), grouped in SQL with `AT TIME ZONE`. Ranges default to the last 7 days and are capped at 92. Collected means SUCCEEDED payments by creation time; invoiced means totals of invoices finalized that day (never DRAFT or CANCELLED); outstanding means total minus SUCCEEDED payments across FINALIZED and PARTIALLY_PAID invoices. Every raw query binds `hospitalId` explicitly (the tenant extension doesn't see raw SQL).
+- **Global search** is `GET /search?q=&scope=`. Scopes by role follow the RBAC matrix: patients (Hospital Admin, Doctor, Nurse, Receptionist, Accountant), doctors (all hospital staff), medicines (Hospital Admin, Doctor, Pharmacist). Every term must match some field. Without `scope`, the top 5 per scope are grouped; with it, results are paginated. Queries are 2–100 characters. A disallowed scope gets 403. Patients and Super Admin have no global search (403); a platform-wide search is out of scope.
+- **Audit trail:** `GET /audit-logs` (Hospital Admin: own hospital; Super Admin: all) returns who, what, which record, and when, never `beforeData`/`afterData`.
+- **Staff work queues:**
+  - `GET /lab-orders`: Lab Technician (hospital queue, URGENT first, then oldest) and Doctor (own orders);
+  - `GET /prescriptions`: Pharmacist (dispensing queue, oldest first) and Doctor (own);
+  - `GET /payments`: Accountant and Hospital Admin reconciliation list.
+  - Status filters take comma-separated lists (`CommaSeparatedEnum`), also on `GET /appointments` and `GET /invoices`.
+  - `GET /appointments?doctorId=` narrows within the caller's scope: for a doctor, a colleague's id returns nothing, never their own list.
+  - Staff invoice rows carry the patient's name.
+- **The patient directory list follows the matrix.** `GET /patients` (list/search) is Hospital Admin, Doctor, Nurse, Receptionist, and Accountant; Lab Technician and Pharmacist now get an empty list. Phase 4 had allowed them as a stopgap until order and prescription flows existed. Their single-patient reads in context are unchanged.
+- **Demo history seed:** `pnpm run db:seed:history` writes two weeks of past activity and a week of bookings per seeded hospital, following the rules the services and database enforce (schedules in local time, no overlaps, billing line and total integrity, invoice status matching payments, four-eyes lab approval). It's idempotent per hospital. It doesn't dispense medicines (stock changes belong to the FEFO service), so seeded prescriptions stay ISSUED.
+- **Frontend:**
+  - a staff workspace at `/dashboard` with role-scoped navigation, a distinct dashboard per role (each its own chunk), a keyboard-operable global search box, and filtered, server-paginated lists whose filters live in the URL;
+  - Recharts for the appointment and revenue charts, with text summaries for screen readers;
+  - rows don't link to workflow screens yet (Phase 13B, D-039);
+  - the Nurse "medication administration checklist" isn't shown: there are no inpatient medication records (D-007).
+
+**Rejected:** one endpoint returning a whole role's dashboard (couples the API to one screen layout, and dashboards share widgets); computing daily buckets in Node from fetched rows (unbounded rows per request); caching analytics in Redis (no measured need at this scale, and a stale "today" is worse than a slower one; revisit in Phase 14's performance pass).

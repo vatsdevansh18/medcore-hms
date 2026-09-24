@@ -17,7 +17,3 @@ export const PORTAL_NAV: NavItem[] = [
   { href: ROUTES.prescriptions, label: "Prescriptions", icon: Pill },
   { href: ROUTES.invoices, label: "Bills & payments", icon: Receipt },
 ];
-
-export function isActive(pathname: string, href: string): boolean {
-  return href === ROUTES.portal ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-}

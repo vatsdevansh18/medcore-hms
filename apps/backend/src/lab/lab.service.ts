@@ -25,7 +25,7 @@ import type { CreateLabOrderDto } from "./dto/create-lab-order.dto";
 import type { UpdateLabOrderItemStatusDto } from "./dto/update-lab-order-item-status.dto";
 import type { EnterLabResultDto } from "./dto/enter-lab-result.dto";
 import type { ApproveLabResultDto } from "./dto/approve-lab-result.dto";
-import { PaginationQueryDto } from "../common/pagination/pagination-query.dto";
+import type { FindLabOrdersQueryDto } from "./dto/find-lab-orders-query.dto";
 import { PaginatedResult } from "../common/pagination/paginated-result";
 import { DOCTOR_NAME_SELECT } from "../prescriptions/prescription-view";
 
@@ -374,23 +374,43 @@ export class LabService {
   }
 
   /**
-   * FR-PORTAL-001: the calling patient's own lab orders, newest first. A
-   * summary only (item status and test name); results are read through
-   * `GET /lab-orders/:id`, which applies the D-021 visibility rule.
-   * Patient-only for now; the lab work queue is Phase 13 (D-035).
+   * `GET /lab-orders`, a summary list per role (item status and test name,
+   * never a result: results go through `GET /lab-orders/:id` and D-021):
+   * - PATIENT: their own orders, newest first (FR-PORTAL-001, D-035);
+   * - LAB_TECHNICIAN: the hospital's work queue, URGENT first, then oldest
+   *   first (docs/04-UI-UX.md §5, Phase 13);
+   * - DOCTOR: orders they placed, newest first.
+   * `status` keeps orders with any item in one of the given statuses.
    */
-  async findMine(query: PaginationQueryDto, caller: AuthenticatedUser) {
-    if (caller.role !== UserRole.PATIENT || !caller.hospitalId) {
-      return PaginatedResult.of([], 0, query.page, query.limit);
-    }
-    return TenantContext.run({ hospitalId: caller.hospitalId, userId: caller.sub, bypassTenancy: false }, async () => {
-      const patient = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
-      if (!patient) return PaginatedResult.of([], 0, query.page, query.limit);
-      const where = { patientId: patient.id };
+  async findAll(query: FindLabOrdersQueryDto, caller: AuthenticatedUser) {
+    if (!caller.hospitalId) return PaginatedResult.of([], 0, query.page, query.limit);
+    const hospitalId = caller.hospitalId;
+    return TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, async () => {
+      const where: Prisma.LabOrderWhereInput = {
+        hospitalId,
+        ...(query.status ? { items: { some: { status: { in: query.status } } } } : {}),
+        ...(query.priority ? { priority: query.priority } : {}),
+      };
+      let orderBy: Prisma.LabOrderOrderByWithRelationInput[] = [{ createdAt: "desc" }, { id: "asc" }];
+      if (caller.role === UserRole.PATIENT) {
+        const patient = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
+        if (!patient) return PaginatedResult.of([], 0, query.page, query.limit);
+        where.patientId = patient.id;
+      } else if (caller.role === UserRole.DOCTOR) {
+        const doctor = await this.prisma.doctorProfile.findUnique({ where: { userId: caller.sub } });
+        if (!doctor) return PaginatedResult.of([], 0, query.page, query.limit);
+        where.doctorId = doctor.id;
+      } else if (caller.role === UserRole.LAB_TECHNICIAN) {
+        // Enum order is ROUTINE, URGENT: descending puts URGENT first.
+        orderBy = [{ priority: "desc" }, { createdAt: "asc" }, { id: "asc" }];
+      } else {
+        return PaginatedResult.of([], 0, query.page, query.limit);
+      }
+      const staff = caller.role !== UserRole.PATIENT;
       const [data, total] = await Promise.all([
         this.prisma.labOrder.findMany({
           where,
-          orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+          orderBy,
           skip: query.skip,
           take: query.limit,
           select: {
@@ -398,6 +418,9 @@ export class LabService {
             priority: true,
             createdAt: true,
             doctor: DOCTOR_NAME_SELECT,
+            ...(staff
+              ? { patient: { select: { user: { select: { id: true, firstName: true, lastName: true } } } } }
+              : {}),
             items: {
               orderBy: { id: "asc" },
               select: { id: true, status: true, labTest: { select: { id: true, name: true } } },
@@ -406,7 +429,11 @@ export class LabService {
         }),
         this.prisma.labOrder.count({ where }),
       ]);
-      return PaginatedResult.of(data, total, query.page, query.limit);
+      const rows = data.map((row) => {
+        const { patient, ...rest } = row as typeof row & { patient?: { user: { id: string; firstName: string; lastName: string } | null } };
+        return staff ? { ...rest, patient: patient?.user ?? null } : rest;
+      });
+      return PaginatedResult.of(rows, total, query.page, query.limit);
     });
   }
 

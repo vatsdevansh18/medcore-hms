@@ -15,3 +15,9 @@ const FALLBACK: HospitalSummary = {
 export function useHospital(): HospitalSummary {
   return useAuthStore((s) => s.user?.hospital) ?? FALLBACK;
 }
+
+/** The timezone times are shown in: the hospital's, or UTC for the
+ * platform-wide Super Admin views (docs/11-DECISIONS.md D-040). */
+export function useWorkspaceTimeZone(): string {
+  return useAuthStore((s) => s.user?.hospital?.timezone ?? "UTC");
+}

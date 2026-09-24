@@ -30,6 +30,20 @@ const DIRECTORY_ROLES: UserRole[] = [
   UserRole.ACCOUNTANT,
 ];
 
+/** "View patient directory (list/search)", docs/07-RBAC-MATRIX.md §3.2:
+ * Lab Technician and Pharmacist have no directory access (⛔); they reach a
+ * patient only through the order or prescription in front of them. Phase 4
+ * allowed them the list as a stopgap until those flows existed; they do now,
+ * and global search (Phase 13) follows the matrix, so the list does too
+ * (docs/11-DECISIONS.md D-040). Single-profile reads keep DIRECTORY_ROLES. */
+const DIRECTORY_LIST_ROLES: UserRole[] = [
+  UserRole.HOSPITAL_ADMIN,
+  UserRole.DOCTOR,
+  UserRole.NURSE,
+  UserRole.RECEPTIONIST,
+  UserRole.ACCOUNTANT,
+];
+
 @Injectable()
 export class PatientsService {
   constructor(
@@ -98,7 +112,7 @@ export class PatientsService {
   }
 
   async findAll(pagination: PaginationQueryDto, caller: AuthenticatedUser, search?: string) {
-    if (!caller.hospitalId || !DIRECTORY_ROLES.includes(caller.role)) {
+    if (!caller.hospitalId || !DIRECTORY_LIST_ROLES.includes(caller.role)) {
       return PaginatedResult.of([], 0, pagination.page, pagination.limit);
     }
     const hospitalId = caller.hospitalId;
