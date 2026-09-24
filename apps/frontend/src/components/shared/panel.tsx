@@ -61,12 +61,31 @@ export function Reveal({ index = 0, className, children }: { index?: number; cla
   );
 }
 
-/** A compact list row: primary text, secondary line, trailing slot. */
-export function PanelRow({ primary, secondary, trailing }: { primary: ReactNode; secondary?: ReactNode; trailing?: ReactNode }) {
+/** A compact list row: primary text, secondary line, trailing slot. With
+ * `href`, the primary text opens the row's workflow screen (Phase 13B). */
+export function PanelRow({
+  primary,
+  secondary,
+  trailing,
+  href,
+}: {
+  primary: ReactNode;
+  secondary?: ReactNode;
+  trailing?: ReactNode;
+  href?: string;
+}) {
   return (
     <li className="flex items-center gap-3 border-b border-border py-2 last:border-b-0">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{primary}</p>
+        <p className="truncate text-sm font-medium">
+          {href ? (
+            <Link href={href} className="text-primary hover:underline">
+              {primary}
+            </Link>
+          ) : (
+            primary
+          )}
+        </p>
         {secondary && <p className="truncate text-xs text-muted">{secondary}</p>}
       </div>
       {trailing}

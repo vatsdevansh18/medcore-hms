@@ -193,8 +193,17 @@ export class InvoicesService {
         if (!own || own.id !== invoice.patientId || invoice.status === InvoiceStatus.DRAFT) {
           throw new NotFoundException("Invoice not found.");
         }
+        return this.view(this.prisma, invoiceId);
       }
-      return this.view(this.prisma, invoiceId);
+      // Staff at the billing desk see whose bill it is (Phase 13B, D-041).
+      const [view, patient] = await Promise.all([
+        this.view(this.prisma, invoiceId),
+        this.prisma.patientProfile.findUnique({
+          where: { id: invoice.patientId },
+          select: { user: { select: { id: true, firstName: true, lastName: true } } },
+        }),
+      ]);
+      return { ...view, patient: patient?.user ?? null };
     });
   }
 

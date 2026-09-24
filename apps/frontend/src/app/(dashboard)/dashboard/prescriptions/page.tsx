@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { FilterBar, FilterSelect } from "@/components/shared/filter-bar";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { RowLink } from "@/components/shared/detail-list";
 import { FullPageLoader } from "@/components/modules/full-page-loader";
 import { RoleGate } from "@/components/modules/role-gate";
 import { usePrescriptionQueue } from "@/services/staff";
@@ -26,7 +27,7 @@ function PrescriptionList() {
   const list = usePrescriptionQueue({ status: listParam(status) }, page);
 
   const columns: Column<PrescriptionQueueRow>[] = [
-    { key: "written", header: "Written", cell: (p) => formatDateTime(p.createdAt, timeZone) },
+    { key: "written", header: "Written", cell: (p) => <RowLink href={ROUTES.staffPrescription(p.id)}>{formatDateTime(p.createdAt, timeZone)}</RowLink> },
     { key: "patient", header: "Patient", cell: (p) => personName(p.patient) },
     {
       key: "medicines",

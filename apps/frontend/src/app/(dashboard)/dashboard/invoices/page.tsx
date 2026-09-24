@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { FilterBar, FilterSelect } from "@/components/shared/filter-bar";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { RowLink } from "@/components/shared/detail-list";
 import { FullPageLoader } from "@/components/modules/full-page-loader";
 import { RoleGate } from "@/components/modules/role-gate";
 import { useInvoiceQueue } from "@/services/staff";
@@ -19,7 +20,7 @@ function InvoiceList() {
   const { values, page, set, setPage } = useUrlFilters(["status"] as const);
   const list = useInvoiceQueue({ status: listParam(values.status) }, page);
   const columns: Column<InvoiceQueueRow>[] = [
-    { key: "created", header: "Opened", cell: (i) => formatDate(i.createdAt, timeZone) },
+    { key: "created", header: "Opened", cell: (i) => <RowLink href={ROUTES.staffInvoice(i.id)}>{formatDate(i.createdAt, timeZone)}</RowLink> },
     { key: "patient", header: "Patient", cell: (i) => personName(i.patient) },
     { key: "finalized", header: "Finalized", cell: (i) => formatDate(i.finalizedAt, timeZone), hideOnMobile: true },
     { key: "total", header: "Total", align: "right", cell: (i) => formatMoney(i.total, i.currency) },

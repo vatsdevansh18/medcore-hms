@@ -6,7 +6,7 @@ import { FIXTURE_FILE, api, login, type PortalFixture } from "./fixture";
 const BACKEND_DIR = join(__dirname, "..", "..", "backend");
 
 /** Runs the backend fixture script (see apps/backend/scripts). */
-export function runFixtureScript(mode: "setup" | "teardown", runId: string): string {
+export function runFixtureScript(mode: "setup" | "teardown" | "password", runId: string): string {
   return execFileSync(
     "pnpm",
     ["exec", "dotenv", "-e", "../../.env", "--", "ts-node", "--transpile-only", "scripts/e2e-portal-fixture.ts", mode, runId],

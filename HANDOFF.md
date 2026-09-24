@@ -7,54 +7,62 @@ Written at a session boundary so the next Claude Code session can pick up with z
 Building **MedCore HMS**, a multi-tenant Hospital Management SaaS platform, as a production-quality internship deliverable. Work follows a strict phase-gated methodology (`docs/05-DEVELOPMENT-PLAN.md`) with a mandatory quality protocol (`docs/12-QUALITY-PROTOCOL.md`) governing every phase.
 
 **Two standing, non-negotiable rules. Read before touching anything:**
-1. **`CLAUDE.md`** (project root), every session. It points to `docs/05-DEVELOPMENT-PLAN.md` for "what phase are we in" and to the `docs/phase-reviews/PHASE-X-REVIEW.md` files as the authoritative record of what's done. Its "Monorepo conventions" list encodes hard-won, real-bug lessons (**43 entries** as of this handoff; 5 added in Phase 13). Read all of them.
+1. **`CLAUDE.md`** (project root), every session. It points to `docs/05-DEVELOPMENT-PLAN.md` for "what phase are we in" and to the `docs/phase-reviews/PHASE-X-REVIEW.md` files as the authoritative record of what's done. Its "Monorepo conventions" list encodes hard-won, real-bug lessons (**46 entries**; 3 added in Phase 13B). Read all of them.
 2. **`docs/12-QUALITY-PROTOCOL.md`**: the implement → verify → root-cause-fix → re-verify cycle, mandatory negative/adversarial testing, continuous security review, "no fake completion," and the required phase-review format (§23). A phase can't be marked PASS without going through it.
 
-**The single most important rule: NEVER start implementing the next phase without the user's explicit go-ahead ("START PHASE N").** This session:
-- after "continue", the user chose "Commit, then Phase 12";
-- later they said "commit and START PHASE 13".
-- Phase 13 is complete and gated **PASS WITH DOCUMENTED MINOR ISSUES**.
+**The single most important rule: NEVER start implementing the next phase without the user's explicit go-ahead ("START PHASE N").** Session history:
+- earlier session: Phases 11 and 12 committed; Phase 13 built and gated;
+- this session: the user said "continue" and chose "rerun, commit, then 13B". Phase 13 was committed as `e6d4a32` (its Playwright rerun first skipped because another project held port 3001), then **Phase 13B was built and gated PASS WITH DOCUMENTED MINOR ISSUES**.
 
-**The plan changed this session (D-039, the user's decision):** a new **Phase 13B — Staff Workflow Screens** sits between Phase 13 and Phase 14 (`docs/05-DEVELOPMENT-PLAN.md`). No phase had ever planned the staff screens for the Phase 4–11 workflows.
-
-Current objective as of this handoff: **wait for the user.** Ask whether to commit Phase 13, then wait for "START PHASE 13B". 13B builds:
-- front-desk registration and scheduling;
-- the doctor's encounter workspace (EMR, vitals, prescribing, lab ordering);
-- lab result entry and four-eyes approval;
-- pharmacy dispensing and stock receiving;
-- the billing desk;
-- hospital admin screens.
-
-Its gate is a full-patient-journey Playwright test through the UI. Re-read the plan section in full when authorized.
+Current objective as of this handoff: **wait for the user.** Ask:
+1. whether to commit Phase 13B;
+2. whether the five API-complete requirements without a screen (see Current State) should get screens before Phase 14;
+3. then wait for "START PHASE 14" (UI/UX polish).
 
 ## Current State
 
-**Fourteen phases complete** (Phase 0 through Phase 13), each with a review at `docs/phase-reviews/PHASE-{0..13}-REVIEW.md`:
+**Fifteen phases complete** (0 through 13, plus 13B), each with a review at `docs/phase-reviews/PHASE-{0..13,13B}-REVIEW.md`:
 - Phases 0–9: PASS.
-- Phases 10–13: PASS WITH DOCUMENTED MINOR ISSUES.
+- Phases 10–13B: PASS WITH DOCUMENTED MINOR ISSUES.
   - Live Stripe/Razorpay: UNVERIFIED (no test keys).
   - Live Resend/Twilio: UNVERIFIED (no credentials).
-  - Phase 13's own UNVERIFIED item is below.
+  - Phase 13's UNVERIFIED Playwright rerun is **closed** (35/35 this session).
 
-**Git:** this session committed Phase 11 (`e78551d`) and Phase 12 (`bf6e45d feat: Phase 12 — patient portal`), both on `master`, excluding `.claude-flow/`. **Phase 13 is NOT committed**; it's all in the working tree (see Next Steps #1).
+**Git:** Phase 13 committed this session (`e6d4a32 feat: Phase 13 — analytics & dashboards`). **Phase 13B is NOT committed**; it's all in the working tree (see Next Steps #1). Exclude `.claude-flow/` when staging.
 
-**Verified this session, after the last code change unless noted:**
-- **Backend:** typecheck and lint **PASS**. Unit 5/5. Full e2e **289/289, 15/15 suites** (about 48s: 260 before + 29 in the new `analytics.e2e-spec.ts`), with no leftover rows. Mutation checks on the analytics spec: 13/14 caught; the 14th is masked by the tenant extension, as designed.
-- **Frontend:** typecheck and lint **PASS**. Vitest **62/62**; the debounce mutation is caught.
-- **Playwright:** **33/33** against the native dev stack (15 portal, 16 dashboards, 2 mobile). This was **before** the last code change, the per-role `next/dynamic` split in `app/(dashboard)/dashboard/page.tsx` (see UNVERIFIED).
-- **Docker:** `docker compose build api` **PASS**. `docker build --target runtime` for the frontend (full `next build`, 28 pages) **PASS**, including after the split: `/dashboard` first load is 122 kB (was 304 kB).
-- **Demo history seeded** in the dev DB (`pnpm run db:seed:history`): about 300 appointments per hospital. A SQL audit of billing and lab consistency found 0 violations.
+**Verified this session, after the last code change:**
+- **Backend:** typecheck and lint **PASS**; unit 5/5; full e2e **338/338, 17/17 suites** (289 + 47 in `staff-workflows.e2e-spec.ts` + 2 in `rate-limit.e2e-spec.ts`); two filter mutations caught.
+- **Frontend:** typecheck and lint **PASS**; Vitest **77/77**; Playwright **35/35** against the native dev stack (17 dashboards, 14 portal, 2 staff journey, 2 mobile).
+- **Build:** frontend production image (`docker build --target runtime`, 46 routes) **PASS**; `docker compose build api` **PASS**.
+- **Console sweep:** every new screen as each role, no errors. **Screenshots** reviewed at 1440px and 390px.
+- **No leftover e2e rows** (0 `e2e-*` users) and no stray empty files.
+
+**Phase 13B's known gaps (the user should decide on them):** these work through the API and are tested there, but have no screen:
+- the doctor's availability editor (FR-APPT-001);
+- vaccinations and family history entry (FR-EMR-005);
+- EMR attachment upload (FR-EMR-006);
+- the doctor's signature upload (FR-RX-003);
+- Super Admin hospital onboarding (FR-HOSP-001).
 
 **Environment right now:**
-- `postgres`, `redis`, `localstack` containers are running.
-- The `api`/`frontend` containers are stopped (images rebuilt this phase, not started).
-- **The native dev servers were stopped by Claude Code for low system memory** late in the session. Their leftover Node children were then stopped by hand; ports 3000/3001 are free.
+- `postgres`, `redis`, `localstack` containers are running; `api`/`frontend` containers are stopped (images rebuilt this phase).
+- The native dev servers were started for the Playwright runs and **stopped afterwards**; ports 3000/3001 are free.
+- **Another project on this machine, `D:\Coding\InternMo\task_2\backend` (`tsx watch src/server.ts`), also uses port 3001.** With the user's permission it was stopped this session (the watcher PID 20400 and its child) for the browser tests, and **not restarted**; the user restarts it themselves. Next time 3001 is busy, identify the owner and **ask before stopping anything**. Stopping only the child isn't enough: the `tsx watch` parent restarts it.
 - **Memory is tight on this machine:** start only what a step needs, and stop it afterwards.
 
-**Seeded accounts** (password `Demo123!`, correct as of this session):
-- per hospital: `hospitaladmin@`, `nurse@`, `receptionist@`, `lab_technician@`, `pharmacist@`, `accountant@` + `medcore-city.medcore.test` / `medcore-metro.medcore.test`, and 4 `dr.<first>.<last>@...` doctors (e.g. `dr.jeremy.keebler@medcore-city.medcore.test`);
+**Seeded accounts** (password `Demo123!`):
+- per hospital: `hospitaladmin@`, `nurse@`, `receptionist@`, `lab_technician@`, `pharmacist@`, `accountant@` + `medcore-city.medcore.test` / `medcore-metro.medcore.test`, and 4 `dr.<first>.<last>@...` doctors (e.g. `dr.wade.weimann@medcore-city.medcore.test`);
 - `superadmin@medcore.test`, and 30 `*@patient.medcore.test` patients;
-- the history seed added a second lab technician per hospital, `lab_reviewer@medcore-city-hospital.medcore.test` (and the Metro equivalent), for four-eyes approvals.
+- a second lab technician per hospital from the history seed, `lab_reviewer@medcore-city-hospital.medcore.test` (and the Metro equivalent), for four-eyes approvals.
+
+### What Phase 13B delivered (details in `PHASE-13B-REVIEW.md`, D-041)
+
+- **Backend reads:**
+  - `GET /lab-tests`, `GET /users` (staff directory), `GET /medical-records/by-appointment/:id`;
+  - `medicalRecordId` filters on prescriptions and lab orders, and `patientId` on appointments (all narrow within scope);
+  - `/auth/me` `doctorProfileId`; `dispensedQuantity` and the patient's name on the prescription detail; the patient's name on the staff invoice detail.
+- **Screens** under `app/(dashboard)/dashboard/`: patients (list, register, profile), booking and emergency visits, the appointment page, the encounter workspace, the lab order (four-eyes), dispensing, medicines and batches, the billing desk, staff, departments, and settings. Phase 13 rows link into them.
+- **Test infrastructure:** the e2e limiter reset per spec file, the rate-limit spec, the fixture `password` mode, and the gate journey `e2e/staff-journey.spec.ts`.
 
 ### What Phase 13 delivered (details in `PHASE-13-REVIEW.md`, D-039/D-040)
 
@@ -76,9 +84,7 @@ Its gate is a full-patient-journey Playwright test through the UI. Re-read the p
 
 ### The UNVERIFIED items
 
-1. **Playwright after the dashboard code split** (Phase 13). The suite was 33/33 before the last change; after it, typecheck, lint, Vitest, and the Linux production build pass, but Playwright wasn't rerun: the dev servers were killed for memory and not restarted without the user. To close it:
-   - start the backend (`apps/backend`: `pnpm exec dotenv -e ../../.env -- pnpm run dev`) and the frontend (`apps/frontend`: `pnpm run dev`);
-   - run `pnpm exec playwright test` from `apps/frontend`, then stop both servers.
+1. ~~Playwright after the Phase 13 dashboard code split~~: **closed this session** (35/35, including every Phase 13 journey). History is kept in `PHASE-13-REVIEW.md`.
 2. **Live Stripe/Razorpay checkout** (Phases 10 and 12). Needs `STRIPE_SECRET_KEY=sk_test_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`, `RAZORPAY_KEY_ID=rzp_test_...`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` in `.env`. Then:
    - pay from `/portal/invoices/:id` with card 4242 4242 4242 4242, running `stripe listen --forward-to localhost:3001/api/payments/webhook/stripe`;
    - confirm the page goes from "Confirming…" to "Payment received";
@@ -89,6 +95,13 @@ Its gate is a full-patient-journey Playwright test through the UI. Re-read the p
 
 ### Other known limitations
 
+- **Phase 13B:**
+  - the five screen gaps above;
+  - receptionist sample collection is API-only (no lab-order read);
+  - nurses see no prescription or lab-order lists in the encounter workspace;
+  - dispensing is FEFO-only in the UI;
+  - form-heavy screens load 186–246 kB first (Phase 14);
+  - a settings change reaches other users' cached `/auth/me` only on their next sign-in.
 - **Phase 13:**
   - seeded prescriptions all stay ISSUED (the seed doesn't dispense), so the pharmacist queue is long;
   - "collected" uses the payment's creation time;
@@ -96,7 +109,7 @@ Its gate is a full-patient-journey Playwright test through the UI. Re-read the p
   - no Super Admin hospital switcher;
   - no Nurse medication checklist (D-007);
   - analytics aren't cached;
-  - queue rows don't link anywhere until 13B.
+  - ~~queue rows don't link anywhere until 13B~~ (they link now).
 - **Phase 12:**
   - the receipt date is the payment creation time;
   - staff aren't notified of a patient reschedule;
@@ -116,58 +129,48 @@ Its gate is a full-patient-journey Playwright test through the UI. Re-read the p
 
 ## Active Files
 
-Relevant to Phase 13B, or to touching Phase 13's surface:
-- **Plan and specs:** `docs/05-DEVELOPMENT-PLAN.md` (Phase 13B), `docs/11-DECISIONS.md` D-039/D-040, `docs/04-UI-UX.md` (§2.7 forms, §2.8 dialogs, §6 role priorities, §8 confirmations), `docs/07-RBAC-MATRIX.md` (every write row).
-- **Staff shell:** `apps/frontend/src/app/(dashboard)/dashboard/layout.tsx` and `components/modules/staff-nav.ts`. New 13B screens get nav entries here; `canOpen` drives `RoleGate`.
-- **Services:** `apps/frontend/src/services/staff.ts` (read hooks and `toQuery`). 13B adds mutations next to them, following the `services/portal.ts` mutation pattern.
-- **Queues to link from:** `apps/frontend/src/components/modules/dashboards/*` and `app/(dashboard)/dashboard/*/page.tsx`. Rows become links once 13B screens exist.
-- **Shared UI:** `apps/frontend/src/components/shared/{data-table,panel,stat-card,filter-bar,confirm-dialog,form-field}.tsx`.
-- **Backend endpoints 13B consumes** (built in Phases 4–11): see `docs/08-API-CONTRACT.md` §4.
-- **Test fixtures:** `apps/backend/scripts/e2e-portal-fixture.ts` and `apps/frontend/e2e/*` (the fixture plus seeded accounts); the 13B gate test goes here.
+Relevant to what comes next (the 13B commit, the screen gaps, Phase 14):
+- **Plan and specs:** `docs/05-DEVELOPMENT-PLAN.md` (Phase 14), `docs/04-UI-UX.md` (§9 checklist, §3 accessibility), `docs/11-DECISIONS.md` D-041, `docs/phase-reviews/PHASE-13B-REVIEW.md`.
+- **Staff shell and access:** `apps/frontend/src/components/modules/staff-nav.ts` (`STAFF_NAV`, `WORKFLOW_ACCESS`), `components/modules/role-gate.tsx`.
+- **Workflow services:** `apps/frontend/src/services/workflows.ts` (all 13B reads and writes, query-key roots), `services/staff.ts`.
+- **Rule mirrors:** `apps/frontend/src/lib/appointment-actions.ts` (copies `ALLOWED_TRANSITIONS` in `apps/backend/src/appointments/appointments.service.ts`), `lib/dispense.ts`, `lib/staff-validation.ts`.
+- **Screens:** `apps/frontend/src/app/(dashboard)/dashboard/**`, `components/modules/{encounter,pharmacy,admin}/*`.
+- **For the screen gaps:** `apps/backend/src/doctors/` (availability and signature APIs), `src/emr/` (attachments, vaccinations, family history), `src/hospitals/` (Super Admin onboarding).
+- **Tests:** `apps/frontend/e2e/staff-journey.spec.ts`, `apps/backend/test/staff-workflows.e2e-spec.ts`, `test/rate-limit.e2e-spec.ts`, `test/helpers/reset-rate-limits.ts`, `apps/backend/scripts/e2e-portal-fixture.ts`.
 
 ## Changes Made (this session)
 
-**Phase 12 (committed `bf6e45d`):**
-- the patient portal, patient list endpoints, reschedule, receipts, timezone scheduling, storage-key and contact minimisation, the Docker dev download fix;
-- the frontend foundation and portal, Vitest, and Playwright.
+**Phase 13 (committed `e6d4a32`):** analytics, dashboards, search, and queues; details in `PHASE-13-REVIEW.md`. Its UNVERIFIED Playwright item was closed later this session, and the review was updated with the history kept.
 
-Details are in `PHASE-12-REVIEW.md`.
-
-**Phase 13 (uncommitted):**
-1. **Plan and decisions:** Phase 13B added to `05-DEVELOPMENT-PLAN.md`; D-039 (13B) and D-040 (analytics, search, queues, directory, seed).
+**Phase 13B (uncommitted):**
+1. **Decision:** D-041.
 2. **Backend (new):**
-   - `src/analytics/` (analytics, search, and audit-log services; controllers; 3 DTOs);
-   - `src/common/validation/comma-separated-enum.decorator.ts`;
-   - `src/billing/payments/payments-query.service.ts`, `src/billing/dto/find-payments-query.dto.ts`, `src/lab/dto/find-lab-orders-query.dto.ts`;
-   - `prisma/seed-history.ts` and the `db:seed:history` script.
+   - `src/lab/lab-tests.{controller,service}.ts` + DTO;
+   - `src/users/dto/find-staff-query.dto.ts`;
+   - `test/staff-workflows.e2e-spec.ts` (47), `test/rate-limit.e2e-spec.ts` (2), `test/helpers/reset-rate-limits.ts`.
 3. **Backend (changed):**
-   - lab and prescriptions services and controllers (staff queues);
-   - appointments (status list, `doctorId` narrowing);
-   - invoices (status list, patient names);
-   - the payments controller and billing module;
-   - patients (directory list roles);
-   - `app.module.ts`.
-4. **Types:** `packages/types/src/analytics.ts`.
+   - users (directory), EMR (by appointment), prescriptions (filter, `dispensedQuantity`, patient), lab (filter, catalog module wiring);
+   - appointments (`patientId`), invoices (staff patient name), auth (`doctorProfileId`);
+   - `test/jest-e2e.json` (`setupFilesAfterEnv`);
+   - `scripts/e2e-portal-fixture.ts` (journey email in teardown, `password` mode).
+4. **Types:** `packages/types/src/staff.ts`; `CurrentUser.doctorProfileId`.
 5. **Frontend (new):**
-   - `app/(dashboard)/dashboard/**`;
-   - `components/modules/{app-shell,staff-nav,global-search,role-gate}.tsx(.ts)`, `components/modules/charts/*`, `components/modules/dashboards/*`;
-   - `components/shared/{data-table,stat-card,panel,filter-bar}.tsx`;
-   - `hooks/use-url-filters.ts`, `lib/{chart-data,zoned-time}.ts`, `services/staff.ts`;
-   - 4 Vitest files, `e2e/dashboards.spec.ts`;
-   - dependency: `recharts`.
+   - 14 pages under `app/(dashboard)/dashboard/`;
+   - `components/modules/{encounter,pharmacy,admin}/*`, `components/shared/{detail-list,lab-flag}.tsx`;
+   - `services/workflows.ts`;
+   - `lib/{appointment-actions,dispense,staff-validation}.ts` + 3 Vitest files;
+   - `e2e/staff-journey.spec.ts` (2 tests).
 6. **Frontend (changed):**
-   - the portal layout (now `AppShell`), `portal-nav.ts`, `(dashboard)/staff` (redirect);
-   - `use-auth.ts` (staff home → `/dashboard`), `use-hospital.ts`;
-   - `constants`, `status-badge.tsx` (staff wording);
-   - `e2e/portal.spec.ts`, `e2e/mobile.spec.ts`.
-7. **Tests:** new `test/analytics.e2e-spec.ts` (29); `test/portal.e2e-spec.ts` updated (doctor list rules).
-8. **Docs:**
-   - API contract §4.11;
-   - RBAC notes, SRS, DB design seed, architecture §2, testing strategy;
-   - SEC-AUDIT-002;
-   - `CLAUDE.md` (+5);
-   - `PHASE-13-REVIEW.md`.
-9. **Removed** 4 more empty stray files from heredocs. `.claude-flow/` dirs remain untracked; **exclude them when staging**.
+   - `staff-nav.ts` (+test), `constants`, `panel.tsx` (`href`), `status-badge.tsx`;
+   - the Phase 13 list pages and dashboards (row links);
+   - the portal lab report page (shared `Flag`);
+   - `e2e/dashboards.spec.ts` (nav labels), `e2e/global-setup.ts`.
+7. **Docs:**
+   - API contract (§4.1/4.2/4.4/4.5/4.6/4.7/4.9/4.11);
+   - RBAC note, architecture §2, testing strategy, SRS note;
+   - `CLAUDE.md` (+3);
+   - `PHASE-13B-REVIEW.md`, and `PHASE-13-REVIEW.md` (UNVERIFIED closed).
+8. **Removed 6 stray files** created by mangled shell commands (5 empty, 1 terminal-screen dump named `item.href`).
 
 ## Failed Attempts
 
@@ -194,23 +197,35 @@ Details are in `PHASE-12-REVIEW.md`.
   - **Mutation "DRAFT counted as invoiced" was first missed** (drafts have no `finalizedAt`). A cancelled-after-finalize fixture now catches it.
   - **Background dev servers were reaped by Claude Code under memory pressure.** Don't auto-restart them; ask.
 
+- **Phase 13B:**
+  - **The full backend suite first failed 31 tests with 429.** The auth limiter (100 per route and client per 15 min, in Redis) is shared by every serial spec, and the new spec pushed logins past 100. Fixed by resetting the limiter per spec file; **don't "fix" it by raising the production limit**.
+  - **Wrong assumption, corrected:** the limiter budget is per *route* and client, not per client (a 101st forgot-password is 429, but login still works). Checked against the running API.
+  - **Playwright `getByLabel("Doctor")` matched the global search box.** Use `{ exact: true }`, and `[data-status=…]` for badges ("Paid" is also a summary label).
+  - **A skeleton `<div>` inside a `<p>` caused a hydration error,** found only by a console sweep, not by the tests. Worth repeating for new screens.
+  - **Screenshots taken on `networkidle` showed loading skeletons** (requests after the token refresh). Add a short settle delay, or wait for content.
+  - **Stopping task_2's server child alone didn't free port 3001:** its `tsx watch` parent restarted it. The parent had to be stopped (with the user's permission).
+  - **A Python-in-bash heredoc failed again** ("unexpected EOF while looking for matching `'`") for a long script. The fix was the documented one: Write the script to a file, then run it. Stray files turned up again, including a terminal-screen dump. Keep checking before committing.
+
 ## Next Steps
 
-1. **Ask the user whether to commit Phase 13.** From the repo root, after the empty-file check:
-   `git add -A -- . ':!**/.claude-flow/**' && git commit -m "feat: Phase 13 — analytics & dashboards"`
-2. **Close the Phase 13 UNVERIFIED item** when the user allows starting the dev servers: run Playwright (steps above), expect 33/33, and update `PHASE-13-REVIEW.md` and this file.
-3. **Wait for "START PHASE 13B."** Then, per `05-DEVELOPMENT-PLAN.md`:
-   - build the staff workflow screens and link the Phase 13 queues to them;
-   - write the full-journey Playwright gate test (registration → booking → encounter → prescription → lab → dispensing → invoice → payment → portal visibility);
-   - follow `04-UI-UX.md` §2.7/§2.8/§8 (forms, dialogs, confirmations).
+1. **Ask the user whether to commit Phase 13B.** From the repo root, after the empty-file check (`find . -maxdepth 4 -type f -empty -not -path '*/node_modules/*' -not -path './.git/*' -not -path '*/.next/*' -not -path '*claude-flow*'`):
+   `git add -A -- . ':!**/.claude-flow/**' ':!.claude-flow/**' && git commit -m "feat: Phase 13B — staff workflow screens"`
+2. **Ask whether the five screen gaps come before Phase 14:** the availability editor (FR-APPT-001), vaccinations and family history (FR-EMR-005), attachments (FR-EMR-006), the signature upload (FR-RX-003), and Super Admin hospital onboarding (FR-HOSP-001). If yes:
+   - build them on the 13B patterns (`services/workflows.ts`, `WORKFLOW_ACCESS`, `staff-validation.ts`);
+   - extend `staff-journey.spec.ts` or add journeys;
+   - update `PHASE-13B-REVIEW.md`.
+3. **Wait for "START PHASE 14"** (UI/UX polish). Its inputs from 13B:
+   - trim the form-heavy screens' first load (186–246 kB);
+   - axe scanning;
+   - the §9 checklist across all screens.
 4. **When credentials arrive,** close the provider UNVERIFIED items and update the Phase 10–12 gates.
 5. **Carried debt:**
    - audit-log writes outside interactive transactions (Phase 15);
    - Socket.IO handshake rate limiting;
    - provider error-classification tests;
-   - axe (Phase 14);
    - Playwright in CI (Phase 16);
-   - analytics caching (measure first, Phase 14).
+   - analytics caching (measure first, Phase 14);
+   - the copied appointment state machine (serve allowed actions from the API).
 
 ## Important Commands, Paths, and Gotchas
 
@@ -224,7 +239,7 @@ pnpm run test                      # unit (jest)
 
 # Full backend e2e (Postgres + Redis + LocalStack up). FIRST stop any API:
 #   docker compose stop api ; check ports: powershell "Get-NetTCPConnection -LocalPort 3000,3001 -State Listen"
-pnpm exec dotenv -e ../../.env -o -- jest --config ./test/jest-e2e.json          # ~48s, 289 tests
+pnpm exec dotenv -e ../../.env -o -- jest --config ./test/jest-e2e.json          # 338 tests; limiter reset per spec file
 pnpm exec dotenv -e ../../.env -o -- jest --config ./test/jest-e2e.json analytics.e2e-spec.ts
 # Output is long: redirect to a file and grep for "✕|●|Tests:".
 
@@ -240,8 +255,8 @@ pnpm exec dotenv -e ../../.env -- pnpm run dev       # apps/backend  -> :3001
 pnpm run dev                                         # apps/frontend -> :3000 (no dotenv-cli there)
 
 # Frontend (from apps/frontend)
-pnpm exec tsc --noEmit && pnpm run lint && pnpm run test     # typecheck, lint, Vitest (62)
-pnpm exec playwright test            # needs API :3001 + web :3000 (33 journeys)
+pnpm exec tsc --noEmit && pnpm run lint && pnpm run test     # typecheck, lint, Vitest (77)
+pnpm exec playwright test            # needs API :3001 + web :3000 (35 tests, ~4 min)
 E2E_KEEP_FIXTURE=1 pnpm exec playwright test   # keep fixture data for debugging
 # Leftover fixture cleanup: (apps/backend) pnpm exec dotenv -e ../../.env -- ts-node --transpile-only scripts/e2e-portal-fixture.ts teardown <runId>
 
@@ -280,6 +295,11 @@ pnpm exec dotenv -e ../../.env -- prisma migrate status
   - page files export only the page;
   - `FormField` keeps its message line;
   - Playwright alert/download selectors.
+- **Phase 13B:**
+  - e2e limiter reset per spec file (don't raise the production limit);
+  - exact Playwright labels in the staff workspace;
+  - new list-reached screens go in `WORKFLOW_ACCESS`;
+  - another project (task_2) may hold :3001: ask before stopping it.
 - **Phase 13:**
   - analytics day bucketing in SQL with explicit `hospitalId`;
   - `@CommaSeparatedEnum` for multi-status filters;
@@ -290,7 +310,7 @@ pnpm exec dotenv -e ../../.env -- prisma migrate status
 ### Key file locations
 
 - **Phase/quality process:** `CLAUDE.md`, `docs/05-DEVELOPMENT-PLAN.md`, `docs/12-QUALITY-PROTOCOL.md`, `docs/phase-reviews/`
-- **Scope/architecture:** `docs/01-PRD.md`, `docs/02-SRS.md`, `docs/03-ARCHITECTURE.md`, `docs/11-DECISIONS.md` (D-001 to D-040)
+- **Scope/architecture:** `docs/01-PRD.md`, `docs/02-SRS.md`, `docs/03-ARCHITECTURE.md`, `docs/11-DECISIONS.md` (D-001 to D-041)
 - **Security IDs:** `docs/09-SECURITY.md`. RBAC: `docs/07-RBAC-MATRIX.md`. API index: `docs/08-API-CONTRACT.md`
 - **Backend:** `apps/backend/src/`, including:
   - `analytics/`, `appointments/`, `billing/`, `lab/`, `prescriptions/`, `notifications/`, and the other feature modules;
@@ -309,32 +329,37 @@ pnpm exec dotenv -e ../../.env -- prisma migrate status
 
 | Check | Status | Notes |
 | --- | --- | --- |
-| Git | UNCOMMITTED | Phases 11 (`e78551d`) and 12 (`bf6e45d`) committed. Phase 13 is in the working tree on `master`; strays removed; exclude `.claude-flow/` when staging |
+| Git | UNCOMMITTED | Phase 13 committed (`e6d4a32`). Phase 13B is in the working tree on `master`; strays removed; exclude `.claude-flow/` when staging |
 | Lint | PASS | Backend (src/test/prisma/scripts) and frontend, zero warnings |
-| Typecheck | PASS | Backend, frontend, types |
-| Unit tests | PASS | Backend jest 5/5; frontend Vitest 62/62 |
-| Integration/e2e tests | PASS | Backend 289/289, 15/15 suites, serial, 0 leftover rows; analytics mutations 13/14 caught (the 14th masked by the tenancy layer, by design) |
-| Component tests | PASS | Vitest + Testing Library (search combobox, DataTable states, forms, badges, api-client) |
-| Browser E2E (Playwright) | PASS before the last change; UNVERIFIED after it | 33/33 native before the per-role code split; not rerun since (dev servers reaped for memory) |
-| Build | PASS | Frontend production build in Docker (28 pages, `/dashboard` 122 kB first load); API image built. Native Windows build fails only at the standalone symlink step (known) |
-| DB migrations | NOT APPLICABLE | No schema change in Phase 13; `20260926090000_patient_portal` (Phase 12) is the latest, drift-checked clean |
-| Docker | PARTIAL | Phase 13 images built; containers not started this phase (memory). Phase 12 container run verified end to end |
-| Security review | PASS | Tenancy on every analytics/search query incl. raw SQL; per-endpoint role matrices; scope-narrowing filters; directory closed to Lab/Pharmacy; audit and payment rows minimised |
+| Typecheck | PASS | Backend, frontend (incl. `e2e/`), types |
+| Unit tests | PASS | Backend jest 5/5; frontend Vitest 77/77 |
+| Integration/e2e tests | PASS | Backend 338/338, 17/17 suites, serial; 2 filter mutations caught; limiter now tested |
+| Component tests | PASS | Vitest + Testing Library |
+| Browser E2E (Playwright) | PASS | 35/35 native, after the last UI change, incl. the 13B gate journey; fixture teardown clean (0 `e2e-*` users) |
+| Build | PASS | Frontend production image (46 routes); API image |
+| DB migrations | NOT APPLICABLE | No schema change in Phase 13B; `20260926090000_patient_portal` is still the latest |
+| Docker | PARTIAL | Images built; containers not started this phase (memory). Phase 12 container run verified end to end |
+| Security review | PASS | Tenancy both ways on every new read; role matrices; scope-narrowing filters; minimised fields; UI access mirrors refuse and the API refuses independently |
 | Live Stripe/Razorpay checkout | UNVERIFIED | No test keys |
 | Live Resend/Twilio sends | UNVERIFIED | No credentials |
 
 ## Current Phase Gate
 
-**Phase 13 — Analytics & Dashboards: PASS WITH DOCUMENTED MINOR ISSUES.** Full detail in `docs/phase-reviews/PHASE-13-REVIEW.md`.
-- `FR-ANALYTICS-001` and `FR-SEARCH-001` are verified in the API (exact figures, tenancy, RBAC) and the browser.
+**Phase 13B — Staff Workflow Screens: PASS WITH DOCUMENTED MINOR ISSUES.** Full detail in `docs/phase-reviews/PHASE-13B-REVIEW.md`.
+- Every screen in the plan's 13B list is built and wired to the real API.
+- The gate journey (registration through portal visibility, four-eyes lab approval, automatic billing, cash payment) passes in the browser.
 - No critical or high-severity defect is open.
-- The minor items are:
-  - the Playwright rerun after the final code split (UNVERIFIED);
-  - the carried provider items;
-  - the scoped-out pieces (Super Admin switcher, the Nurse medication checklist, and the read-only queues until Phase 13B).
+- The minor items are the five API-complete requirements without a screen (for the user to schedule), documented scope choices, and the carried provider items.
 
 ## Important Decisions / Context
 
+- **D-041 (Phase 13B):**
+  - the new reads, narrowing filters, and response fields;
+  - `WORKFLOW_ACCESS` mirroring;
+  - confirmations per §8;
+  - FEFO-only dispensing in the UI;
+  - receptionist collection API-only;
+  - the e2e limiter reset (rejected: raising the limit through env).
 - **D-039:** Phase 13B (Staff Workflow Screens) is inserted before Phase 14; it's "13B" so later phase numbers stay valid.
 - **D-040:**
   - analytics endpoints with hospital-local SQL day buckets (UTC platform view);

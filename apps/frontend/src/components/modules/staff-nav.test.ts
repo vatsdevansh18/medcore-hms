@@ -7,7 +7,7 @@ import { toQuery } from "@/services/staff";
 describe("staff navigation mirrors the RBAC matrix", () => {
   it("gives each role only its own destinations", () => {
     const labels = (role: UserRole) => navFor(role).map((i) => i.label);
-    expect(labels(UserRole.PHARMACIST)).toEqual(["Overview", "Dispensing queue", "Inventory"]);
+    expect(labels(UserRole.PHARMACIST)).toEqual(["Overview", "Dispensing queue", "Medicines", "Stock alerts"]);
     expect(labels(UserRole.LAB_TECHNICIAN)).toEqual(["Overview", "Lab queue"]);
     expect(labels(UserRole.SUPER_ADMIN)).toEqual(["Overview", "Audit log"]);
   });
@@ -18,6 +18,21 @@ describe("staff navigation mirrors the RBAC matrix", () => {
     expect(canOpen(UserRole.PHARMACIST, ROUTES.invoiceQueue)).toBe(false);
     expect(canOpen(UserRole.NURSE, ROUTES.beds)).toBe(true);
     expect(canOpen(UserRole.DOCTOR, ROUTES.auditLog)).toBe(false);
+  });
+
+  it("opens workflow screens only to the roles whose API calls they make", () => {
+    expect(canOpen(UserRole.RECEPTIONIST, "/dashboard/patients/new")).toBe(true);
+    expect(canOpen(UserRole.NURSE, "/dashboard/patients/new")).toBe(false);
+    expect(canOpen(UserRole.DOCTOR, "/dashboard/encounters/:id")).toBe(true);
+    expect(canOpen(UserRole.RECEPTIONIST, "/dashboard/encounters/:id")).toBe(false);
+    expect(canOpen(UserRole.LAB_TECHNICIAN, "/dashboard/lab-orders/:id")).toBe(true);
+    expect(canOpen(UserRole.PHARMACIST, "/dashboard/lab-orders/:id")).toBe(false);
+    expect(canOpen(UserRole.PHARMACIST, "/dashboard/prescriptions/:id")).toBe(true);
+    expect(canOpen(UserRole.ACCOUNTANT, "/dashboard/invoices/:id")).toBe(true);
+    expect(canOpen(UserRole.DOCTOR, "/dashboard/invoices/:id")).toBe(false);
+    expect(canOpen(UserRole.HOSPITAL_ADMIN, ROUTES.staffDirectory)).toBe(true);
+    expect(canOpen(UserRole.RECEPTIONIST, ROUTES.staffDirectory)).toBe(false);
+    expect(canOpen(UserRole.PATIENT, "/dashboard/appointments/:id")).toBe(false);
   });
 
   it("never shows a patient any staff destination beyond the overview", () => {

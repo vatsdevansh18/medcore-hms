@@ -28,4 +28,10 @@ export class FindAppointmentsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   doctorId?: string;
+
+  /** Phase 13B (D-041): one patient's visits (the front-desk patient page).
+   * Narrows within the caller's scope, like `doctorId`. */
+  @IsOptional()
+  @IsUUID()
+  patientId?: string;
 }

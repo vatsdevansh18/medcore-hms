@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { FilterBar, FilterSelect } from "@/components/shared/filter-bar";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { RowLink } from "@/components/shared/detail-list";
 import { FullPageLoader } from "@/components/modules/full-page-loader";
 import { RoleGate } from "@/components/modules/role-gate";
 import { useDoctorOptions, useStaffAppointments } from "@/services/staff";
@@ -47,7 +48,7 @@ function AppointmentsList() {
   );
 
   const columns: Column<AppointmentView>[] = [
-    { key: "when", header: "When", cell: (a) => formatDateTime(a.scheduledStart, timeZone) },
+    { key: "when", header: "When", cell: (a) => <RowLink href={ROUTES.staffAppointment(a.id)}>{formatDateTime(a.scheduledStart, timeZone)}</RowLink> },
     { key: "patient", header: "Patient", cell: (a) => personName(a.patient.user) },
     ...(isDoctor ? [] : [{ key: "doctor", header: "Doctor", cell: (a: AppointmentView) => `${doctorName(a.doctor.user)} · ${a.doctor.specialization}`, hideOnMobile: true }]),
     { key: "reason", header: "Reason", cell: (a) => a.reasonForVisit ?? "—", hideOnMobile: true },

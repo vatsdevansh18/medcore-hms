@@ -53,6 +53,7 @@ export function ReceptionistDashboard() {
                   {list.data.map((a) => (
                     <PanelRow
                       key={a.id}
+                      href={ROUTES.staffAppointment(a.id)}
                       primary={`${formatTime(a.scheduledStart, timeZone)} · ${personName(a.patient.user)}`}
                       secondary={`${doctorName(a.doctor.user)} · ${a.doctor.specialization}`}
                       trailing={<StatusBadge status={a.status} />}
@@ -72,6 +73,7 @@ export function ReceptionistDashboard() {
                     {list.data.slice(0, 5).map((a) => (
                       <PanelRow
                         key={a.id}
+                        href={ROUTES.staffAppointment(a.id)}
                         primary={personName(a.patient.user)}
                         secondary={`${formatDateTime(a.scheduledStart, timeZone)} · ${doctorName(a.doctor.user)}`}
                       />
@@ -89,6 +91,7 @@ export function ReceptionistDashboard() {
                     {list.data.slice(0, 5).map((inv) => (
                       <PanelRow
                         key={inv.id}
+                        href={ROUTES.staffInvoice(inv.id)}
                         primary={personName(inv.patient)}
                         secondary={formatDate(inv.createdAt, timeZone)}
                         trailing={<span className="text-sm tabular-nums">{formatMoney(inv.total, inv.currency)}</span>}
@@ -135,6 +138,7 @@ export function NurseDashboard() {
                   {list.data.map((a) => (
                     <PanelRow
                       key={a.id}
+                      href={ROUTES.staffAppointment(a.id)}
                       primary={`${formatTime(a.scheduledStart, timeZone)} · ${personName(a.patient.user)}`}
                       secondary={a.status === AppointmentStatus.IN_PROGRESS ? "With the doctor now: vitals due" : doctorName(a.doctor.user)}
                       trailing={<StatusBadge status={a.status} />}
@@ -184,6 +188,7 @@ export function LabDashboard() {
                   {list.data.slice(0, 10).map((o) => (
                     <PanelRow
                       key={o.id}
+                      href={ROUTES.labOrder(o.id)}
                       primary={
                         <>
                           {o.priority === "URGENT" && (
@@ -234,6 +239,7 @@ export function PharmacistDashboard() {
                   {list.data.slice(0, 8).map((p) => (
                     <PanelRow
                       key={p.id}
+                      href={ROUTES.staffPrescription(p.id)}
                       primary={personName(p.patient)}
                       secondary={`${formatDateTime(p.createdAt, timeZone)} · ${p.items.map((i) => i.medicine.name).join(", ")}`}
                       trailing={<StatusBadge status={p.status} kind="staff-rx" />}
@@ -268,7 +274,7 @@ export function PharmacistDashboard() {
                 {(list) => (
                   <ul>
                     {list.data.slice(0, 5).map((m) => (
-                      <PanelRow key={m.id} primary={m.name} trailing={<span className="text-sm text-warning tabular-nums">{m.availableQuantity} / {m.reorderLevel}</span>} />
+                      <PanelRow key={m.id} href={ROUTES.medicine(m.id)} primary={m.name} trailing={<span className="text-sm text-warning tabular-nums">{m.availableQuantity} / {m.reorderLevel}</span>} />
                     ))}
                   </ul>
                 )}
@@ -283,6 +289,7 @@ export function PharmacistDashboard() {
                     {list.data.slice(0, 5).map((b) => (
                       <PanelRow
                         key={b.id}
+                        href={ROUTES.medicine(b.medicine.id)}
                         primary={b.medicine.name}
                         secondary={`Batch ${b.batchNumber} · ${b.quantityOnHand} ${b.medicine.unit}`}
                         trailing={<span className="text-xs text-danger">{formatCalendarDate(b.expiryDate)}</span>}
@@ -339,6 +346,7 @@ export function AccountantDashboard() {
                   {list.data.slice(0, 8).map((inv) => (
                     <PanelRow
                       key={inv.id}
+                      href={ROUTES.staffInvoice(inv.id)}
                       primary={personName(inv.patient)}
                       secondary={`Finalized ${formatDate(inv.finalizedAt, timeZone)}`}
                       trailing={

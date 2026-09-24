@@ -40,6 +40,12 @@ export class MedicalRecordsController {
   }
 
   @Roles(...EMR_READ_ROLES)
+  @Get("by-appointment/:appointmentId")
+  findByAppointment(@Param("appointmentId") appointmentId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.medicalRecordsService.findByAppointment(appointmentId, user);
+  }
+
+  @Roles(...EMR_READ_ROLES)
   @Get("by-id/:id")
   findOne(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.medicalRecordsService.findOne(id, user);

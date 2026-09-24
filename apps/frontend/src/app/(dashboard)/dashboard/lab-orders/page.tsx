@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { FilterBar, FilterSelect } from "@/components/shared/filter-bar";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { RowLink } from "@/components/shared/detail-list";
 import { FullPageLoader } from "@/components/modules/full-page-loader";
 import { RoleGate } from "@/components/modules/role-gate";
 import { useLabQueue } from "@/services/staff";
@@ -40,7 +41,7 @@ function LabList() {
         ),
     },
     { key: "patient", header: "Patient", cell: (o) => personName(o.patient) },
-    { key: "tests", header: "Tests", cell: (o) => o.items.map((i) => i.labTest.name).join(", ") },
+    { key: "tests", header: "Tests", cell: (o) => <RowLink href={ROUTES.labOrder(o.id)}>{o.items.map((i) => i.labTest.name).join(", ")}</RowLink> },
     ...(isLab ? [{ key: "doctor", header: "Ordered by", cell: (o: LabQueueRow) => doctorName(o.doctor.user), hideOnMobile: true }] : []),
     { key: "ordered", header: "Ordered", cell: (o) => formatDateTime(o.createdAt, timeZone), hideOnMobile: true },
     {

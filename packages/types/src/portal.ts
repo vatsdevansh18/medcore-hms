@@ -46,6 +46,8 @@ export interface CurrentUser {
   phoneVerifiedAt: string | null;
   createdAt: string;
   patientProfileId: string | null;
+  /** DOCTOR only, else null (Phase 13B, D-041). */
+  doctorProfileId: string | null;
   hospital: HospitalSummary | null;
 }
 

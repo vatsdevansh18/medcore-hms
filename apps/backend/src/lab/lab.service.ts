@@ -390,6 +390,7 @@ export class LabService {
         hospitalId,
         ...(query.status ? { items: { some: { status: { in: query.status } } } } : {}),
         ...(query.priority ? { priority: query.priority } : {}),
+        ...(query.medicalRecordId ? { medicalRecordId: query.medicalRecordId } : {}),
       };
       let orderBy: Prisma.LabOrderOrderByWithRelationInput[] = [{ createdAt: "desc" }, { id: "asc" }];
       if (caller.role === UserRole.PATIENT) {

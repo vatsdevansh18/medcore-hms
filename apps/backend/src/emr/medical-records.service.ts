@@ -235,6 +235,20 @@ export class MedicalRecordsService {
     });
   }
 
+  /** The encounter record of one appointment (the doctor's encounter
+   * workspace opens from an appointment, Phase 13B, D-041). Same visibility
+   * as a read by id: Doctor/Nurse own hospital, Patient own only. 404 when
+   * the appointment has no record yet, or isn't visible to the caller. */
+  async findByAppointment(appointmentId: string, caller: AuthenticatedUser) {
+    const hospitalId = await this.requireHospitalId(caller);
+    const found = await TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
+      this.prisma.medicalRecord.findUnique({ where: { appointmentId }, select: { id: true } }),
+    );
+    if (!found) throw new NotFoundException("Medical record not found.");
+    const record = await this.getForRead(found.id, caller);
+    return this.toRecordResponse(record);
+  }
+
   async findOne(id: string, caller: AuthenticatedUser) {
     const record = await this.getForRead(id, caller);
     return this.toRecordResponse(record);

@@ -202,7 +202,30 @@ export class PrescriptionsService {
 
   async findOne(id: string, caller: AuthenticatedUser) {
     if (!VIEW_ROLES.includes(caller.role)) throw new NotFoundException("Prescription not found.");
-    return toPrescriptionView(await this.getForView(id, caller));
+    const prescription = await this.getForView(id, caller);
+    // Phase 13B (D-041): each line says how much has been dispensed so far
+    // (the pharmacist dispenses the remainder), and staff see the patient's
+    // name. Who dispensed, and from which batch, stays out of the view.
+    const extras = await TenantContext.run(
+      { hospitalId: prescription.hospitalId, userId: caller.sub, bypassTenancy: false },
+      () =>
+        this.prisma.prescription.findUnique({
+          where: { id: prescription.id },
+          select: {
+            items: { select: { id: true, dispenseRecords: { select: { quantity: true } } } },
+            patient: { select: { user: { select: { id: true, firstName: true, lastName: true } } } },
+          },
+        }),
+    );
+    const dispensed = new Map(
+      (extras?.items ?? []).map((item) => [item.id, item.dispenseRecords.reduce((sum, r) => sum + r.quantity, 0)]),
+    );
+    const view = toPrescriptionView(prescription);
+    return {
+      ...view,
+      items: view.items.map((item) => ({ ...item, dispensedQuantity: dispensed.get(item.id) ?? 0 })),
+      ...(caller.role === UserRole.PATIENT ? {} : { patient: extras?.patient.user ?? null }),
+    };
   }
 
   /**
@@ -219,6 +242,7 @@ export class PrescriptionsService {
       const where: Prisma.PrescriptionWhereInput = {
         hospitalId,
         ...(query.status ? { status: { in: query.status } } : {}),
+        ...(query.medicalRecordId ? { medicalRecordId: query.medicalRecordId } : {}),
       };
       let orderBy: Prisma.PrescriptionOrderByWithRelationInput[] = [{ createdAt: "desc" }, { id: "asc" }];
       if (caller.role === UserRole.PATIENT) {

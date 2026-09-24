@@ -26,11 +26,24 @@ function navLabels(page: Page) {
 }
 
 const ROLES: [string, string, string, string[]][] = [
-  ["Hospital Admin", `hospitaladmin@${CITY}`, "Hospital overview", ["Overview", "Appointments", "Bills", "Payments", "Inventory", "Beds", "Audit log"]],
-  ["Nurse", `nurse@${CITY}`, "Ward & clinic", ["Overview", "Appointments", "Beds"]],
-  ["Receptionist", `receptionist@${CITY}`, "Front desk", ["Overview", "Schedule", "Bills"]],
+  ["Hospital Admin", `hospitaladmin@${CITY}`, "Hospital overview", [
+    "Overview",
+    "Appointments",
+    "Patients",
+    "Bills",
+    "Payments",
+    "Medicines",
+    "Stock alerts",
+    "Beds",
+    "Staff",
+    "Departments",
+    "Settings",
+    "Audit log",
+  ]],
+  ["Nurse", `nurse@${CITY}`, "Ward & clinic", ["Overview", "Appointments", "Patients", "Beds"]],
+  ["Receptionist", `receptionist@${CITY}`, "Front desk", ["Overview", "Schedule", "Patients", "Bills"]],
   ["Lab Technician", `lab_technician@${CITY}`, "Laboratory queue", ["Overview", "Lab queue"]],
-  ["Pharmacist", `pharmacist@${CITY}`, "Pharmacy", ["Overview", "Dispensing queue", "Inventory"]],
+  ["Pharmacist", `pharmacist@${CITY}`, "Pharmacy", ["Overview", "Dispensing queue", "Medicines", "Stock alerts"]],
   ["Accountant", `accountant@${CITY}`, "Finance", ["Overview", "Bills", "Payments"]],
   ["Super Admin", "superadmin@medcore.test", "Platform overview", ["Overview", "Audit log"]],
 ];

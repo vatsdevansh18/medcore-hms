@@ -49,6 +49,11 @@ const STYLES: Record<string, StatusStyle> = {
   PARTIALLY_PAID: { label: "Partly paid", tone: "warning", icon: CircleDashed },
   PAID: { label: "Paid", tone: "success", icon: CheckCircle2 },
   REFUNDED: { label: "Refunded", tone: "neutral", icon: CircleDashed },
+  // Medicine batches and accounts (Phase 13B)
+  ACTIVE: { label: "Active", tone: "success", icon: CheckCircle2 },
+  QUARANTINED: { label: "Quarantined", tone: "danger", icon: Ban },
+  DEPLETED: { label: "Used up", tone: "neutral", icon: CircleDashed },
+  DISABLED: { label: "Disabled", tone: "neutral", icon: Ban },
   // Payments
   SUCCEEDED: { label: "Succeeded", tone: "success", icon: CheckCircle2 },
   FAILED: { label: "Failed", tone: "danger", icon: AlertTriangle },

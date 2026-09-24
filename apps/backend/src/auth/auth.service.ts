@@ -220,6 +220,9 @@ export class AuthService {
           // (the EMR routes are keyed by it) and the hospital's name,
           // timezone, and reschedule policy (CurrentUser, packages/types).
           patientProfile: { select: { id: true } },
+          // Phase 13B: a doctor's own DoctorProfile id (availability and
+          // the doctor filters are keyed by it, D-041).
+          doctorProfile: { select: { id: true } },
           hospital: {
             select: {
               id: true,
@@ -239,7 +242,12 @@ export class AuthService {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    const { patientProfile, hospital, ...rest } = user;
-    return { ...rest, patientProfileId: patientProfile?.id ?? null, hospital: hospital ?? null };
+    const { patientProfile, doctorProfile, hospital, ...rest } = user;
+    return {
+      ...rest,
+      patientProfileId: patientProfile?.id ?? null,
+      doctorProfileId: doctorProfile?.id ?? null,
+      hospital: hospital ?? null,
+    };
   }
 }

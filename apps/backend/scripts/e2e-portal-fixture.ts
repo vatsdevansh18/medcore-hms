@@ -11,6 +11,11 @@
  * clinical and billing work is then done through the real API, so every
  * business rule and billing invariant applies. It prints the ids as JSON.
  * `teardown` removes everything tied to that run's accounts.
+ *
+ * `password` (Phase 13B) gives the patient the staff journey registered at
+ * the front desk a known password. A front-desk patient only ever gets an
+ * emailed set-your-password link (FR-HOSP-004), which a browser test can't
+ * read, so this stands in for the patient following that link.
  */
 import * as bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
@@ -25,6 +30,8 @@ const emails = (runId: string) => ({
   labApprover: `e2e-lab-${runId}@medcore-city.medcore.test`,
   // Created by the registration journey itself, through the public API.
   registered: `e2e-reg-${runId}@patient.medcore.test`,
+  // Registered at the front desk by the Phase 13B staff journey, through the UI.
+  journey: `e2e-journey-${runId}@patient.medcore.test`,
 });
 
 async function setup(runId: string) {
@@ -152,11 +159,19 @@ async function teardown(runId: string) {
   process.stdout.write(JSON.stringify({ removedUsers: userIds.length }));
 }
 
+async function setPassword(runId: string) {
+  const passwordHash = await bcrypt.hash(PASSWORD, 10);
+  const { count } = await prisma.user.updateMany({ where: { email: emails(runId).journey, role: "PATIENT" }, data: { passwordHash } });
+  if (count !== 1) throw new Error(`journey patient for run ${runId} not found`);
+  process.stdout.write(JSON.stringify({ updated: count }));
+}
+
 async function main() {
   const [mode, runId] = process.argv.slice(2);
-  if (!runId || !/^[a-z0-9]+$/.test(runId)) throw new Error("usage: e2e-portal-fixture.ts setup|teardown <runId>");
+  if (!runId || !/^[a-z0-9]+$/.test(runId)) throw new Error("usage: e2e-portal-fixture.ts setup|teardown|password <runId>");
   if (mode === "setup") await setup(runId);
   else if (mode === "teardown") await teardown(runId);
+  else if (mode === "password") await setPassword(runId);
   else throw new Error(`unknown mode ${mode}`);
 }
 

@@ -524,6 +524,7 @@ export class AppointmentsService {
     const baseWhere: Record<string, unknown> = { deletedAt: null };
     if (query.status) baseWhere.status = { in: query.status };
     if (query.doctorId) baseWhere.doctorId = query.doctorId;
+    if (query.patientId) baseWhere.patientId = query.patientId;
     if (query.dateFrom || query.dateTo) {
       baseWhere.scheduledStart = {
         ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}),
@@ -563,7 +564,12 @@ export class AppointmentsService {
         where.doctorId = own;
       } else if (caller.role === UserRole.PATIENT) {
         const patient = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
-        where.patientId = patient?.id ?? "__no_profile__";
+        const own = patient?.id ?? "__no_profile__";
+        // Same narrowing rule for patientId: another patient's id is empty.
+        if (query.patientId && query.patientId !== own) {
+          return PaginatedResult.of([], 0, query.page, query.limit);
+        }
+        where.patientId = own;
       }
 
       const [data, total] = await Promise.all([

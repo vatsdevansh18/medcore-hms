@@ -84,13 +84,14 @@ export function AdminDashboard({ platform = false }: { platform?: boolean }) {
         )}
         {!platform && (
           <Reveal index={3}>
-            <Panel title="Low stock" href={ROUTES.inventory} linkLabel="Inventory">
+            <Panel title="Low stock" href={ROUTES.inventory} linkLabel="Stock alerts">
               <PanelBody query={lowStock} empty="Every medicine is above its reorder level." isEmpty={(l) => l.data.length === 0}>
                 {(list) => (
                   <ul>
                     {list.data.slice(0, 6).map((m) => (
                       <PanelRow
                         key={m.id}
+                        href={ROUTES.medicine(m.id)}
                         primary={m.name}
                         secondary={`Reorder at ${m.reorderLevel} ${m.unit}`}
                         trailing={

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
@@ -48,7 +49,9 @@ export function DoctorDashboard() {
                       <span className="absolute -left-[21px] top-1.5 size-2.5 rounded-full border-2 border-surface bg-primary" aria-hidden="true" />
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <span className="w-20 text-sm font-medium tabular-nums">{formatTime(a.scheduledStart, timeZone)}</span>
-                        <span className="min-w-0 flex-1 truncate text-sm">{personName(a.patient.user)}</span>
+                        <Link href={ROUTES.staffAppointment(a.id)} className="min-w-0 flex-1 truncate text-sm text-primary hover:underline">
+                          {personName(a.patient.user)}
+                        </Link>
                         <StatusBadge status={a.status} />
                       </div>
                       {a.reasonForVisit && <p className="ml-20 pl-3 text-xs text-muted">{a.reasonForVisit}</p>}
@@ -101,6 +104,7 @@ export function DoctorDashboard() {
                   {list.data.slice(0, 6).map((o) => (
                     <PanelRow
                       key={o.id}
+                      href={ROUTES.labOrder(o.id)}
                       primary={personName(o.patient)}
                       secondary={o.items.map((i) => i.labTest.name).join(", ")}
                       trailing={<StatusBadge status={o.items[0]?.status ?? "ORDERED"} kind="lab" />}
@@ -119,6 +123,7 @@ export function DoctorDashboard() {
                   {list.data.slice(0, 6).map((p) => (
                     <PanelRow
                       key={p.id}
+                      href={ROUTES.staffPrescription(p.id)}
                       primary={personName(p.patient)}
                       secondary={`${formatDate(p.createdAt, timeZone)} · ${p.items.map((i) => i.medicine.name).join(", ")}`}
                       trailing={<StatusBadge status={p.status} kind="staff-rx" />}

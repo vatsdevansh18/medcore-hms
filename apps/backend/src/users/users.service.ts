@@ -9,8 +9,10 @@ import { TenantContext } from "../common/tenancy/tenant-context";
 import { AppException } from "../common/errors/app-exception";
 import { PasswordResetService } from "../auth/services/password-reset.service";
 import { SAFE_USER_SELECT } from "../common/prisma/safe-user-select";
+import { PaginatedResult } from "../common/pagination/paginated-result";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
 import type { CreateStaffDto } from "./dto/create-staff.dto";
+import { STAFF_DIRECTORY_ROLES, type FindStaffQueryDto } from "./dto/find-staff-query.dto";
 
 /**
  * FR-HOSP-002 — staff provisioning. Admin-created accounts are pre-verified
@@ -104,6 +106,49 @@ export class UsersService {
       await this.passwordResetService.requestReset(user.email);
 
       return user;
+    });
+  }
+
+  /** The caller's own hospital staff directory (Hospital Admin, RBAC §3.2
+   * "View any staff profile"). Every term of `search` must match a name or
+   * the email. Rows are `SAFE_USER_SELECT` plus the employee code and
+   * department; doctors carry their profile id and specialization. */
+  async findStaff(query: FindStaffQueryDto, caller: AuthenticatedUser) {
+    if (!caller.hospitalId) return PaginatedResult.of([], 0, query.page, query.limit);
+    const hospitalId = caller.hospitalId;
+    const terms = (query.search ?? "").trim().split(/\s+/).filter(Boolean);
+    return TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, async () => {
+      const where = {
+        hospitalId,
+        deletedAt: null,
+        role: query.role ? query.role : { in: [...STAFF_DIRECTORY_ROLES] },
+        AND: terms.map((term) => ({
+          OR: [
+            { firstName: { contains: term, mode: "insensitive" as const } },
+            { lastName: { contains: term, mode: "insensitive" as const } },
+            { email: { contains: term, mode: "insensitive" as const } },
+          ],
+        })),
+      };
+      const [data, total] = await Promise.all([
+        this.prisma.user.findMany({
+          where,
+          orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],
+          skip: query.skip,
+          take: query.limit,
+          select: {
+            ...SAFE_USER_SELECT,
+            staffProfile: {
+              select: { employeeCode: true, department: { select: { id: true, name: true } } },
+            },
+            doctorProfile: {
+              select: { id: true, specialization: true, department: { select: { id: true, name: true } } },
+            },
+          },
+        }),
+        this.prisma.user.count({ where }),
+      ]);
+      return PaginatedResult.of(data, total, query.page, query.limit);
     });
   }
 

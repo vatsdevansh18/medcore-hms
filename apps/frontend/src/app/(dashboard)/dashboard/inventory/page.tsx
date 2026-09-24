@@ -5,20 +5,21 @@ import type { ExpiringBatchView, LowStockView } from "@medcore/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { FilterBar, FilterSelect } from "@/components/shared/filter-bar";
+import { RowLink } from "@/components/shared/detail-list";
 import { RoleGate } from "@/components/modules/role-gate";
 import { useExpiring, useLowStock } from "@/services/staff";
 import { formatCalendarDate } from "@/lib/format";
 import { ROUTES } from "@/constants";
 
 const lowColumns: Column<LowStockView>[] = [
-  { key: "name", header: "Medicine", cell: (m) => (m.genericName ? `${m.name} (${m.genericName})` : m.name) },
+  { key: "name", header: "Medicine", cell: (m) => <RowLink href={ROUTES.medicine(m.id)}>{m.genericName ? `${m.name} (${m.genericName})` : m.name}</RowLink> },
   { key: "form", header: "Form", cell: (m) => m.form.toLowerCase(), hideOnMobile: true },
   { key: "available", header: "Available", align: "right", cell: (m) => `${m.availableQuantity} ${m.unit}` },
   { key: "reorder", header: "Reorder level", align: "right", cell: (m) => m.reorderLevel },
 ];
 
 const expiringColumns: Column<ExpiringBatchView>[] = [
-  { key: "medicine", header: "Medicine", cell: (b) => b.medicine.name },
+  { key: "medicine", header: "Medicine", cell: (b) => <RowLink href={ROUTES.medicine(b.medicine.id)}>{b.medicine.name}</RowLink> },
   { key: "batch", header: "Batch", cell: (b) => b.batchNumber },
   { key: "quantity", header: "Quantity", align: "right", cell: (b) => `${b.quantityOnHand} ${b.medicine.unit}` },
   { key: "expiry", header: "Expires", cell: (b) => formatCalendarDate(b.expiryDate) },
@@ -32,7 +33,7 @@ function Inventory() {
   const expiring = useExpiring(Number(days), expPage);
   return (
     <>
-      <PageHeader title="Inventory" description="Stock below reorder level and batches nearing expiry. Expired batches are quarantined automatically every night." />
+      <PageHeader title="Stock alerts" description="Stock below reorder level and batches nearing expiry. Expired batches are quarantined automatically every night." />
       <section aria-labelledby="low-heading" className="mb-8">
         <h2 id="low-heading" className="mb-3 text-lg font-semibold">
           Low stock

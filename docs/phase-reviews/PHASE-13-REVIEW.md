@@ -174,7 +174,7 @@ Checked against `04-UI-UX.md` §5 and the §9 checklist, from screenshots of all
 
 ## Known Minor Issues
 
-- **UNVERIFIED: Playwright after the dashboard code split.** The last code change (per-role `next/dynamic` chunks in `app/(dashboard)/dashboard/page.tsx`) passed typecheck, lint, Vitest, and the Linux production build. The Playwright suite, 33/33 just before it, wasn't rerun afterwards: Claude Code stopped the dev servers for low memory, and they weren't restarted without the user. Rerun `pnpm --filter @medcore/frontend exec playwright test` with the stack up.
+- **Closed during Phase 13B: Playwright after the dashboard code split.** At the Phase 13 gate this was UNVERIFIED: the last code change (per-role `next/dynamic` chunks in `app/(dashboard)/dashboard/page.tsx`) passed typecheck, lint, Vitest, and the Linux production build, but the Playwright suite (33/33 just before it) wasn't rerun, because Claude Code had stopped the dev servers for low memory. Phase 13 was committed (`e6d4a32`) with the item still open. It was rerun on 2026-09-24 during Phase 13B: all 33 earlier journeys passed (17 in `dashboards.spec.ts`, 14 in `portal.spec.ts`, 2 mobile), within a 34/34 run that also included the Phase 13B journey. The navigation-label assertions were updated for the Phase 13B navigation (see `PHASE-13B-REVIEW.md`).
 - **The Phase 13 containers were built but not started** (memory). The Phase 12 compose stack was verified end to end in containers; Phase 13 adds no infrastructure.
 - **Seeded prescriptions all stay ISSUED** (the seed doesn't dispense), so the pharmacist's queue shows about 80 items.
 - **"Collected" uses the payment's creation time** (checkout start for online payments), as noted for receipts in Phase 12.
@@ -213,6 +213,6 @@ Checked against `04-UI-UX.md` §5 and the §9 checklist, from screenshots of all
 
 `FR-ANALYTICS-001` and `FR-SEARCH-001` are implemented and verified in the API (exact figures, tenancy, RBAC) and the browser. No critical or high-severity defect is open.
 
-The minor items are one UNVERIFIED re-run (the Playwright suite after the final code-splitting change, blocked by the machine's memory pressure), the carried provider items, and the scoped-out pieces above.
+The minor items were one UNVERIFIED re-run (the Playwright suite after the final code-splitting change, blocked by the machine's memory pressure; since closed, see Known Minor Issues), the carried provider items, and the scoped-out pieces above.
 
 Next is Phase 13B (Staff Workflow Screens), and it doesn't start until the user says so.

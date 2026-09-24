@@ -69,6 +69,18 @@ apps/frontend/
 
 As built in Phase 12, the Playwright suite lives in `apps/frontend/e2e` (next to the app it drives and its `playwright.config.ts`) rather than a root `tests/` folder. It runs against a running stack (API on :3001, web on :3000, native or Docker). Global setup calls `apps/backend/scripts/e2e-portal-fixture.ts` to create two patients and a second lab technician, then builds the clinical history through the real API (encounter, vitals, prescription, lab result approved under four-eyes, finalized and part-paid invoice). Global teardown removes everything tied to that run. Journeys: sign-in redirect and return, wrong password, session survives reload, sign-out, staff redirect, registration to verification, records/vitals/allergies, prescription PDF download, lab result, receipt download, online payment unavailable (no provider keys), cancelled-checkout return, book → reschedule → cancel, live in-app notification over Socket.IO, cross-patient access denied in the UI and the API, and a phone-width pass with no horizontal scroll. Phase 13 adds `e2e/dashboards.spec.ts`: each staff role lands on its own dashboard with exactly its own navigation, the admin KPIs and described charts, the Super Admin platform view without search, a role refused another role's page (UI and API 403), a patient sent from the staff workspace to the portal, keyboard global search, per-role search scopes, and URL-kept filters on the lab queue, outstanding bills, and the audit log. Backend coverage is `test/analytics.e2e-spec.ts` (exact figures on fixed 2019 data across two timezones, per-endpoint role matrices, tenancy both ways, search scopes, queue ordering and filters).
 
+Phase 13B adds `e2e/staff-journey.spec.ts`, the phase gate. One test runs the whole patient journey through the staff screens, each role in its own browser context:
+- the receptionist registers the patient and books them;
+- the doctor starts the visit, records vitals, prescribes, and orders a test;
+- one lab technician collects, tests, and enters the result, and doesn't get an Approve button for their own entry;
+- a second technician approves it;
+- the pharmacist dispenses;
+- the doctor completes the visit;
+- the receptionist finds consultation, lab, and pharmacy lines billed automatically, finalises, and takes cash (PAID);
+- the patient sees the paid bill, the prescription, and the result in the portal.
+
+A second test checks that workflow screens refuse other roles in the UI and that the API refuses the same calls. The fixture script's `password` mode stands in for the patient's emailed set-password link. Backend coverage is `test/staff-workflows.e2e-spec.ts` (the new reads and filters: roles, tenancy both ways, scope narrowing) and `test/rate-limit.e2e-spec.ts` (the auth limiter, which had no test before). Since Phase 13B the e2e setup clears the rate limiter before each spec file (`test/helpers/reset-rate-limits.ts`, D-041).
+
 ## 7. Exit Criteria for Phase 15 (Testing & Hardening)
 
 - All nine mandatory scenarios (§3) green in CI.

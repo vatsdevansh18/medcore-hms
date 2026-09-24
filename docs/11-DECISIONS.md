@@ -599,3 +599,26 @@ Two Phase 9/10 channel choices change to match the brief:
   - the Nurse "medication administration checklist" isn't shown: there are no inpatient medication records (D-007).
 
 **Rejected:** one endpoint returning a whole role's dashboard (couples the API to one screen layout, and dashboards share widgets); computing daily buckets in Node from fetched rows (unbounded rows per request); caching analytics in Redis (no measured need at this scale, and a stale "today" is worse than a slower one; revisit in Phase 14's performance pass).
+
+---
+
+## D-041 — Staff workflow screens and the reads they needed (Phase 13B)
+
+**Context:** Phase 13B builds the staff screens for the workflows Phases 4–11 built API-first (D-039). Wiring them showed that a few reads a screen needs didn't exist: nothing listed the lab test catalog (the Phase 8 specs wrote tests straight into the database), the Hospital Admin had no staff list, an encounter could only be found by listing a patient's records, the encounter's own prescriptions and lab orders couldn't be listed, a prescription didn't say how much of each line was already dispensed, and a staff invoice didn't say whose it was.
+
+**Decision:**
+- **New read endpoints**, each tenant-scoped from the JWT and following the RBAC matrix:
+  - `GET /lab-tests?search=`: the hospital's catalog with reference ranges (Doctor, Lab Technician, Hospital Admin);
+  - `GET /users?role=&search=`: the staff directory (Hospital Admin); `SAFE_USER_SELECT` plus employee code and department, never patients or Super Admins;
+  - `GET /medical-records/by-appointment/:appointmentId`: the encounter of one visit, with the same visibility as a read by id.
+- **Narrowing filters** (they narrow within the caller's scope, never widen it, like `doctorId` in D-040): `medicalRecordId` on `GET /prescriptions` and `GET /lab-orders`; `patientId` on `GET /appointments`.
+- **Response additions:** `GET /auth/me` adds `doctorProfileId`; `GET /prescriptions/:id` adds each line's `dispensedQuantity` (a sum; who dispensed and from which batch stay out) and, for staff, the patient's name; staff `GET /invoices/:id` adds the patient's name.
+- **Screens** (`app/(dashboard)/dashboard/**`): patients (directory, front-desk registration, profile with visits), booking on a patient's behalf and emergency visits, the appointment page (status moves mirroring the API state machine, cancel with a reason, opening a bill), the encounter workspace (start, vitals, addenda, allergies, prescribing, lab ordering, completing), the lab order page (collect, test, enter a result, four-eyes review), dispensing, the medicine catalog and batch receiving, the billing desk (lines, credits, finalising, cash, receipts), and admin (staff and doctors, departments, reschedule policy). The Phase 13 queue and dashboard rows now link into them.
+- **Access mirroring:** list-reached screens are in `WORKFLOW_ACCESS` (`staff-nav.ts`) next to the sidebar, so `RoleGate` refuses a hand-typed URL with a message instead of a failed request. UX only; the API enforces everything.
+- **Confirmations** (`04-UI-UX.md` §8) on: cancelling, a no-show, completing a visit, approving or rejecting a result, dispensing, finalising a bill, recording cash, and deleting a department. Additive steps (vitals, addenda, allergies, an order, a line) have none.
+- **Dispensing uses FEFO only:** the screen asks how much to hand over per line and the server picks batches (D-004). The API's optional `batchId` isn't offered.
+- **Receptionist sample collection isn't on a screen:** the matrix allows it, but the receptionist has no lab-order list or detail read, so the lab technician marks collection. The API route is unchanged.
+- **Nurses in the encounter workspace** see vitals, allergies, and addenda. They have no list read for prescriptions or lab orders (`GET /prescriptions`, `GET /lab-orders`), so those panels are the doctor's.
+- **The e2e suite clears the auth rate limiter before each spec file** (`test/helpers/reset-rate-limits.ts`). All specs share one loopback IP and run serially, and this phase took the suite past 100 logins in 15 minutes, so every later spec failed with 429. The limiter itself is now tested on its own (`test/rate-limit.e2e-spec.ts`); nothing had tested it before.
+
+**Rejected:** giving the receptionist lab-order reads just for the collection button (widens clinical visibility for one step the lab already does); a batch picker on the dispense screen (FEFO is the policy, and a manual override is an exception the API already refuses with `expectedBatchId`); raising the auth throttle limit through an env var for tests (changes production configuration surface to suit a test harness); fetching an encounter by paging through a patient's records (fragile past the first page).
