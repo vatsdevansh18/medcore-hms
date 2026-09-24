@@ -170,6 +170,7 @@ export const NotificationType = {
   LAB_RESULT_APPROVED: "LAB_RESULT_APPROVED",
   LOW_STOCK_ALERT: "LOW_STOCK_ALERT",
   MEDICINE_EXPIRY_DIGEST: "MEDICINE_EXPIRY_DIGEST",
+  PAYMENT_RECEIVED: "PAYMENT_RECEIVED",
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -216,3 +217,7 @@ export const InsuranceClaimStatus = {
   PAID: "PAID",
 } as const;
 export type InsuranceClaimStatus = (typeof InsuranceClaimStatus)[keyof typeof InsuranceClaimStatus];
+
+/** Online checkout providers (a subset of PaymentMethod: CASH is staff-recorded). */
+export const PaymentProvider = { STRIPE: "STRIPE", RAZORPAY: "RAZORPAY" } as const;
+export type PaymentProvider = (typeof PaymentProvider)[keyof typeof PaymentProvider];

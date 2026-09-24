@@ -18,6 +18,7 @@ import { PRISMA_CLIENT } from "../src/prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../src/prisma/prisma-client.factory";
 import { TenantContext } from "../src/common/tenancy/tenant-context";
 import { configureApp } from "../src/common/bootstrap/configure-app";
+import { purgeBilling } from "./helpers/billing-cleanup";
 
 /**
  * Phase 8 — Laboratory. Covers order creation gated on "own encounter"
@@ -323,6 +324,7 @@ describe("Laboratory (e2e)", () => {
       await prisma.labTestReferenceRange.deleteMany({ where: { labTest: { hospitalId: { in: createdHospitalIds } } } });
       await prisma.labTest.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.medicalRecord.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
+      await purgeBilling(prisma, createdHospitalIds);
       await prisma.appointment.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.doctorProfile.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.patientProfile.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });

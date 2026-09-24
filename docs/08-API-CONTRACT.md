@@ -56,6 +56,7 @@ Every thrown exception in the backend is normalised into the error envelope by a
 | `INSUFFICIENT_STOCK`        | 422         | Added in Phase 9: not enough eligible (unexpired, non-quarantined) stock to fill a dispense line, or a named batch is exhausted. Nothing is partially dispensed (`11-DECISIONS.md` D-024) |
 | `INVOICE_LOCKED`            | 409         | Attempted edit of a finalised invoice's line items                                                                                                         |
 | `WEBHOOK_SIGNATURE_INVALID` | 400         | Payment webhook signature verification failed                                                                                                              |
+| `PAYMENT_PROVIDER_UNAVAILABLE` | 503 / 502 | Added in Phase 10: the requested online payment provider isn't configured (503) or failed to create the checkout (502). No payment state changes (`11-DECISIONS.md` D-030) |
 | `RATE_LIMITED`              | 429         | Throttle threshold exceeded                                                                                                                                |
 | `INTERNAL_ERROR`            | 500         | Unhandled server fault (logged to Sentry with correlation ID)                                                                                              |
 
@@ -179,16 +180,20 @@ Implemented in Phase 9 on the existing `medicines/` module (`11-DECISIONS.md` D-
 
 ### 4.9 Billing & Payments
 
-| Method + Path                         | Auth                                              | FR              |
-| ------------------------------------- | ------------------------------------------------- | --------------- |
-| `POST /invoices`                      | Receptionist / Accountant (own)                   | FR-BILL-001     |
-| `POST /invoices/:id/items`            | Receptionist / Accountant / system-internal (own) | FR-BILL-001     |
-| `PATCH /invoices/:id/finalize`        | Receptionist / Accountant (own)                   | FR-BILL-002     |
-| `GET /invoices/:id`                   | Receptionist / Accountant (own) / Patient (own)   | §3.8            |
-| `POST /invoices/:id/checkout-session` | Patient (self)                                    | FR-BILL-004     |
-| `POST /payments/webhook/stripe`       | Provider (signature-verified, no role)            | FR-BILL-004/005 |
-| `POST /payments/webhook/razorpay`     | Provider (signature-verified, no role)            | FR-BILL-004/005 |
-| `POST /invoices/:id/cash-payment`     | Receptionist / Accountant (own)                   | FR-BILL-004     |
+Implemented in Phase 10 (`11-DECISIONS.md` D-027 to D-031). Money amounts are decimals with 2 places, returned as strings. Every invoice response includes `items`, `payments` (id/method/amount/currency/status/createdAt only), and the derived `amountPaid`/`balanceDue`.
+
+| Method + Path                         | Auth                                                      | FR              | Notes |
+| ------------------------------------- | --------------------------------------------------------- | --------------- | ----- |
+| _(system)_ automatic charges          | n/a                                                       | FR-BILL-001     | Encounter creation → CONSULTATION (doctor's fee). Lab order → one LAB line per test. Dispense → one PHARMACY line per dispense record (quantity × batch MRP). Each is written in the same transaction as the clinical record, onto the visit's DRAFT invoice; a supplementary DRAFT is opened if the visit's invoice is already finalized (D-027). |
+| `POST /invoices`                      | Receptionist / Accountant (own)                           | FR-BILL-001     | `{appointmentId}`. Returns the visit's open DRAFT invoice, creating one if none exists (idempotent). |
+| `GET /invoices?status=&patientId=&appointmentId=` | Receptionist / Accountant / Hospital Admin (own) | §3.8        | Added in Phase 10: paginated work queues and reconciliation (D-031). |
+| `POST /invoices/:id/items`            | Receptionist / Accountant (own)                           | FR-BILL-001/002 | `{sourceType: ROOM\|OTHER, description, quantity, unitPrice}`. Negative `unitPrice` = credit line. Positive lines only on DRAFT (else 409 `INVOICE_LOCKED`). Credits allowed on DRAFT/FINALIZED/PARTIALLY_PAID, but may not take the total below the amount paid (422). A client `total`/`lineTotal` is rejected with 400 (D-029). |
+| `PATCH /invoices/:id/finalize`        | Receptionist / Accountant (own)                           | FR-BILL-002     | DRAFT only (else 409 `INVOICE_LOCKED`). Needs at least one line (400). A zero total goes straight to PAID. Records `finalizedBy`/`finalizedAt`. |
+| `GET /invoices/:id`                   | Receptionist / Accountant / Hospital Admin (own) / Patient (self) | §3.8    | Another patient's invoice, or another hospital's, is 404. |
+| `POST /invoices/:id/cash-payment`     | Receptionist / Accountant (own)                           | FR-BILL-004/006 | `{amount}`: at most the balance due (422). FINALIZED/PARTIALLY_PAID only (409). Returns `{receipt, invoice}` and notifies the patient. |
+| `POST /invoices/:id/checkout-session` | Patient (self)                                            | FR-BILL-004     | `{provider: STRIPE\|RAZORPAY}`. The amount is always the server balance. Creates a PENDING Payment and returns `{paymentId, reference, checkoutUrl (Stripe), keyId (Razorpay), amount, currency}`. 503 `PAYMENT_PROVIDER_UNAVAILABLE` if the provider isn't configured. |
+| `POST /payments/webhook/stripe`       | Provider (signature-verified, no role)                    | FR-BILL-004/005 | Raw-body `Stripe-Signature` check (300s tolerance) → 400 `WEBHOOK_SIGNATURE_INVALID`. Acts on `checkout.session.completed` (paid), `async_payment_succeeded`/`failed`, and `expired`. Duplicates and unmatched events → 200 `{received, applied: false}`. |
+| `POST /payments/webhook/razorpay`     | Provider (signature-verified, no role)                    | FR-BILL-004/005 | `X-Razorpay-Signature` HMAC check → 400 if invalid. Acts on `payment.captured`/`order.paid` (success) and `payment.failed`. Same idempotency. |
 
 ### 4.10 Notifications
 

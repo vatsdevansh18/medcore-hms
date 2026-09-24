@@ -20,6 +20,7 @@ import { EmrModule } from "./emr/emr.module";
 import { MedicinesModule } from "./medicines/medicines.module";
 import { PrescriptionsModule } from "./prescriptions/prescriptions.module";
 import { LabModule } from "./lab/lab.module";
+import { BillingModule } from "./billing/billing.module";
 import { JwtAuthGuard } from "./auth/guards/jwt-auth.guard";
 import { RolesGuard } from "./auth/guards/roles.guard";
 import { AppThrottlerGuard } from "./common/throttler/app-throttler.guard";
@@ -73,6 +74,7 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
     MedicinesModule,
     PrescriptionsModule,
     LabModule,
+    BillingModule,
   ],
   providers: [
     // Order matters: throttling and authentication happen before RBAC, and

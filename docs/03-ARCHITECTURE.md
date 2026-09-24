@@ -238,6 +238,12 @@ sequenceDiagram
 
 Idempotency is enforced by a unique constraint on `Payment.providerEventId`; a redelivered webhook is a no-op, never a double credit.
 
+**As implemented in Phase 10** (`11-DECISIONS.md` D-029/D-030):
+- The checkout step first creates a `PENDING` `Payment` for the server-computed balance, sends its id in the provider metadata, and stores the provider's checkout reference in `providerEventId`.
+- The webhook settles it through a conditional `PENDING → SUCCEEDED/FAILED` update under the invoice row lock, so duplicate or concurrent deliveries apply funds exactly once, and the invoice status is re-derived from the sum of succeeded payments.
+- The raw request body is captured for `/api/payments/webhook/*` only (`configureApp`).
+- `PaymentReceived` is currently a persisted `PAYMENT_RECEIVED` `Notification` row; the event bus is Phase 11.
+
 ## 10. Storage & File Architecture
 
 All uploads (EMR attachments, lab report PDFs, prescription PDFs, doctor signatures) go to a private S3 bucket. The API never proxies file bytes for large files — it issues short-lived pre-signed PUT URLs for upload and pre-signed GET URLs for download, after validating MIME type, extension, and size server-side on the initiating request. Nothing is public-read by default. Cloudinary is used only for optional profile-photo transformation, not as the system of record for clinical documents.

@@ -17,6 +17,7 @@ import { PRISMA_CLIENT } from "../src/prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../src/prisma/prisma-client.factory";
 import { TenantContext } from "../src/common/tenancy/tenant-context";
 import { configureApp } from "../src/common/bootstrap/configure-app";
+import { purgeBilling } from "./helpers/billing-cleanup";
 import { PrescriptionPdfQueueService } from "../src/queue/prescription-pdf-queue.service";
 
 /**
@@ -259,6 +260,7 @@ describe("Prescriptions (e2e)", () => {
       });
       await prisma.prescription.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.medicalRecord.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
+      await purgeBilling(prisma, createdHospitalIds);
       await prisma.appointment.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.medicine.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.doctorProfile.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });

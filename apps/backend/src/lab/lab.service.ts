@@ -6,11 +6,13 @@ import {
   LabOrderPriority,
   LabResultDecision,
   LabResultFlag,
+  InvoiceItemSourceType,
   NotificationChannel,
   NotificationType,
   UserRole,
 } from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
+import { ChargesService } from "../billing/charges.service";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
 import { AppException } from "../common/errors/app-exception";
@@ -63,6 +65,7 @@ export class LabService {
   constructor(
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly s3: S3Service,
+    private readonly charges: ChargesService,
   ) {}
 
   private async requireHospitalId(caller: AuthenticatedUser): Promise<string> {
@@ -101,16 +104,38 @@ export class LabService {
         );
       }
 
-      return this.prisma.labOrder.create({
-        data: {
+      const testsById = new Map(labTests.map((t) => [t.id, t]));
+      // FR-BILL-001: each ordered test is charged in the same transaction
+      // as the order itself (appointment lock first, the billing lock order).
+      return this.prisma.$transaction(async (tx) => {
+        await this.charges.lockAppointment(tx, hospitalId, medicalRecord.appointmentId);
+        const order = await tx.labOrder.create({
+          data: {
+            hospitalId,
+            medicalRecordId: medicalRecord.id,
+            doctorId: medicalRecord.doctorId,
+            patientId: medicalRecord.patientId,
+            priority: dto.priority ?? LabOrderPriority.ROUTINE,
+            items: { create: dto.items.map((item) => ({ labTestId: item.labTestId })) },
+          },
+          include: LAB_ORDER_INCLUDE,
+        });
+        await this.charges.addCharges(
+          tx,
           hospitalId,
-          medicalRecordId: medicalRecord.id,
-          doctorId: medicalRecord.doctorId,
-          patientId: medicalRecord.patientId,
-          priority: dto.priority ?? LabOrderPriority.ROUTINE,
-          items: { create: dto.items.map((item) => ({ labTestId: item.labTestId })) },
-        },
-        include: LAB_ORDER_INCLUDE,
+          medicalRecord.appointmentId,
+          order.items.map((item) => {
+            const test = testsById.get(item.labTestId)!;
+            return {
+              sourceType: InvoiceItemSourceType.LAB,
+              sourceId: item.id,
+              description: `Lab test: ${test.name}`,
+              quantity: 1,
+              unitPrice: test.price,
+            };
+          }),
+        );
+        return order;
       });
     });
   }

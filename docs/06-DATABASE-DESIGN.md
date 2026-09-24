@@ -263,7 +263,7 @@ Indexes: `MedicineBatch(medicineId, expiryDate)` (drives FIFO-by-expiry selectio
 
 ```mermaid
 erDiagram
-    APPOINTMENT ||--o| INVOICE : generates
+    APPOINTMENT ||--o{ INVOICE : generates
     INVOICE ||--o{ INVOICE_ITEM : contains
     INVOICE ||--o{ PAYMENT : "paid via"
     INVOICE ||--o| INSURANCE_CLAIM : "optionally claims"
@@ -273,7 +273,7 @@ erDiagram
     INVOICE {
         uuid id PK
         uuid hospitalId FK
-        uuid appointmentId FK UK
+        uuid appointmentId FK
         uuid patientId FK
         enum status "DRAFT|FINALIZED|PARTIALLY_PAID|PAID|CANCELLED|REFUNDED"
         decimal subtotal
@@ -332,6 +332,14 @@ erDiagram
 ```
 
 `Invoice.total` integrity: enforced both by always recomputing it server-side on any item mutation (never accepting it from the client) and by a Postgres `CHECK`-adjacent safeguard — a trigger that recomputes and compares on `INVOICE_ITEM` write, rejecting drift. This gives the billing-integrity test (`10-TESTING-STRATEGY.md`) two independent layers to catch a regression in.
+
+**As implemented in Phase 10** (migration `20260924120000_billing_integrity`, `11-DECISIONS.md` D-027/D-028):
+- `Invoice.appointmentId` is no longer unique. A charge incurred after a visit's invoice is finalized opens a supplementary DRAFT invoice. "One DRAFT per appointment" is enforced under an `Appointment` row lock.
+- CHECK constraints: `InvoiceItem.lineTotal = quantity × unitPrice`, `quantity > 0`; `Invoice.total = subtotal + tax − discount` with all three `≥ 0`; `Payment.amount > 0`.
+- A deferred constraint trigger on `Invoice` and `InvoiceItem` verifies `subtotal = SUM(lineTotal)` at commit.
+- A BEFORE trigger makes a non-DRAFT invoice's line items immutable. The only exception is appending a credit (negative) line while it's FINALIZED/PARTIALLY_PAID.
+- New columns: `Invoice.finalizedAt`, `InvoiceItem.createdAt`, `Payment.recordedBy` (cash).
+- `Payment.providerEventId` (unique) holds the provider's checkout reference (Stripe Checkout Session / Razorpay order id); see D-029.
 
 ## 4. Key Design Decisions
 

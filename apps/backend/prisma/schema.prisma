@@ -517,7 +517,9 @@ model Appointment {
   deletedAt       DateTime?
 
   medicalRecord MedicalRecord?
-  invoice       Invoice?
+  /// Normally one; a charge incurred after the visit's invoice is finalized
+  /// opens a supplementary DRAFT invoice (docs/11-DECISIONS.md D-027).
+  invoices      Invoice[]
 
   @@index([hospitalId, scheduledStart])
   @@index([doctorId, scheduledStart])
@@ -847,7 +849,7 @@ model LabResult {
 model Invoice {
   id            String         @id @default(uuid())
   hospitalId    String
-  appointmentId String         @unique
+  appointmentId String
   appointment   Appointment    @relation(fields: [appointmentId], references: [id])
   patientId     String
   patient       PatientProfile @relation(fields: [patientId], references: [id])
@@ -858,6 +860,7 @@ model Invoice {
   total         Decimal        @default(0) @db.Decimal(12, 2)
   currency      String         @default("INR")
   finalizedBy   String?
+  finalizedAt   DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -868,6 +871,7 @@ model Invoice {
   @@index([hospitalId])
   @@index([patientId])
   @@index([hospitalId, status])
+  @@index([appointmentId])
 }
 
 model InvoiceItem {
@@ -880,6 +884,7 @@ model InvoiceItem {
   quantity    Int                   @default(1)
   unitPrice   Decimal               @db.Decimal(10, 2)
   lineTotal   Decimal               @db.Decimal(10, 2)
+  createdAt   DateTime              @default(now())
 
   @@index([invoiceId])
 }
@@ -907,6 +912,8 @@ model Payment {
   providerEventId           String?       @unique
   providerSignatureVerified Boolean       @default(false)
   rawPayloadSanitized       Json?
+  /// Staff user who recorded a CASH payment; null for provider payments.
+  recordedBy                String?
   createdAt                 DateTime      @default(now())
 
   @@index([hospitalId])

@@ -85,6 +85,30 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   S3_ENDPOINT: string = "";
+
+  // Phase 10: payments (docs/09-SECURITY.md SEC-PAY-*). All optional: an
+  // unconfigured provider makes checkout return 503 and its webhook fail
+  // closed (400). SEC-PAY-004 "test mode only" is enforced here, not just
+  // documented: a live-mode key refuses to boot.
+  @IsOptional()
+  @Matches(/^(sk_test_\w+)?$/, { message: "STRIPE_SECRET_KEY must be a test-mode key (sk_test_...) — SEC-PAY-004." })
+  STRIPE_SECRET_KEY: string = "";
+
+  @IsOptional()
+  @IsString()
+  STRIPE_WEBHOOK_SECRET: string = "";
+
+  @IsOptional()
+  @Matches(/^(rzp_test_\w+)?$/, { message: "RAZORPAY_KEY_ID must be a test-mode key (rzp_test_...) — SEC-PAY-004." })
+  RAZORPAY_KEY_ID: string = "";
+
+  @IsOptional()
+  @IsString()
+  RAZORPAY_KEY_SECRET: string = "";
+
+  @IsOptional()
+  @IsString()
+  RAZORPAY_WEBHOOK_SECRET: string = "";
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

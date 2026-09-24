@@ -1,6 +1,12 @@
 import { HttpStatus, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { ApiErrorCode, AppointmentStatus, AttachmentOwnerType, UserRole } from "@medcore/types";
+import {
+  ApiErrorCode,
+  AppointmentStatus,
+  AttachmentOwnerType,
+  InvoiceItemSourceType,
+  UserRole,
+} from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
@@ -10,6 +16,7 @@ import type { PaginationQueryDto } from "../common/pagination/pagination-query.d
 import { EncryptionService } from "../common/crypto/encryption.service";
 import { S3Service } from "../common/storage/s3.service";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
+import { ChargesService } from "../billing/charges.service";
 import { validateAttachment } from "./attachment-validation";
 import type { CreateMedicalRecordDto } from "./dto/create-medical-record.dto";
 import type { CreateAddendumDto } from "./dto/create-addendum.dto";
@@ -30,6 +37,7 @@ export class MedicalRecordsService {
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly encryption: EncryptionService,
     private readonly s3: S3Service,
+    private readonly charges: ChargesService,
   ) {}
 
   /** `notesEncrypted`/`noteEncrypted` never leave this service as raw
@@ -133,20 +141,37 @@ export class MedicalRecordsService {
       }
 
       try {
-        const created = await this.prisma.medicalRecord.create({
-          data: {
-            hospitalId,
-            appointmentId: appointment.id,
-            patientId: appointment.patientId,
-            doctorId: appointment.doctorId,
-            chiefComplaint: dto.chiefComplaint,
-            presentingSymptoms: dto.presentingSymptoms,
-            diagnosisNotes: dto.diagnosisNotes,
-            confirmedDiagnosisIcd10: dto.confirmedDiagnosisIcd10 ?? [],
-            treatmentPlan: dto.treatmentPlan,
-            notesEncrypted: dto.notes ? this.encryption.encrypt(dto.notes) : undefined,
-          },
-          include: RECORD_INCLUDE,
+        // FR-BILL-001: the consultation fee is charged in the same
+        // transaction as the encounter it bills for, so neither can exist
+        // without the other. Appointment lock first: the lock order every
+        // billing write uses.
+        const created = await this.prisma.$transaction(async (tx) => {
+          await this.charges.lockAppointment(tx, hospitalId, appointment.id);
+          const record = await tx.medicalRecord.create({
+            data: {
+              hospitalId,
+              appointmentId: appointment.id,
+              patientId: appointment.patientId,
+              doctorId: appointment.doctorId,
+              chiefComplaint: dto.chiefComplaint,
+              presentingSymptoms: dto.presentingSymptoms,
+              diagnosisNotes: dto.diagnosisNotes,
+              confirmedDiagnosisIcd10: dto.confirmedDiagnosisIcd10 ?? [],
+              treatmentPlan: dto.treatmentPlan,
+              notesEncrypted: dto.notes ? this.encryption.encrypt(dto.notes) : undefined,
+            },
+            include: RECORD_INCLUDE,
+          });
+          await this.charges.addCharges(tx, hospitalId, appointment.id, [
+            {
+              sourceType: InvoiceItemSourceType.CONSULTATION,
+              sourceId: appointment.id,
+              description: `Consultation: ${appointment.doctor.specialization}`,
+              quantity: 1,
+              unitPrice: appointment.doctor.consultationFee,
+            },
+          ]);
+          return record;
         });
         return this.toRecordResponse(created);
       } catch (err) {

@@ -361,3 +361,82 @@ Read endpoints (`GET /medicines/low-stock`) never touch the latch. A newly creat
 **Rationale:** There's no frontend search-as-you-type consumer yet to measure against. The live query is cheap and always correct right after a dispense, and a cache would need write-path invalidation on receive, dispense, and quarantine. That adds a correctness risk for no measured gain.
 
 **Consequences:** Revisit in Phase 13/14's performance pass if profiling shows the need.
+
+---
+
+## D-027 — Supplementary invoices: an appointment may have more than one invoice (Phase 10)
+
+**Context:** The Phase 2 schema made `Invoice.appointmentId` unique (one invoice per visit). FR-BILL-001 says charges accumulate "automatically as incurred," and FR-BILL-002 says a finalized invoice's lines are immutable. In a real outpatient flow the patient often pays for the consultation at the counter, and the invoice is finalized, before collecting medicines at the pharmacy. With a unique invoice per visit, that pharmacy charge would have nowhere to go.
+
+**Alternatives considered:**
+- (a) Reject the dispense while the visit's invoice is finalized. This blocks a clinical workflow on a billing state.
+- (b) Silently drop the charge. That's revenue loss and an invisible data gap.
+- (c) Edit the finalized invoice. This directly violates FR-BILL-002.
+- (d) Open a supplementary DRAFT invoice for the same appointment.
+
+**Decision:** (d). Migration `20260924120000_billing_integrity` drops the unique index and adds a plain index on `Invoice.appointmentId`, so `Appointment.invoice` becomes `Appointment.invoices`. `ChargesService.getOrCreateDraftInvoice` adds a charge to the visit's open DRAFT invoice, or creates one if none is open. "At most one DRAFT invoice per appointment" is enforced under an `Appointment` row lock (`SELECT ... FOR UPDATE`) rather than a partial unique index, which Prisma's schema can't express. It's proven by a concurrent-creation e2e test and by a lock-removal mutation.
+
+**Consequences:** The normal case is still one invoice per visit; the PRD's "single invoice that aggregates line items" holds until the first invoice is finalized. Every billing write follows one lock order: Appointment → Invoice (dispensing: Prescription → Medicines → Appointment → Invoice).
+
+---
+
+## D-028 — FR-BILL-003 enforced in the database as well as the application (Phase 10)
+
+**Context:** FR-BILL-003 requires `invoice.total` to be "re-verified in a database check/trigger," and FR-BILL-002 requires finalized line items to be immutable. Prisma doesn't model CHECK constraints or triggers.
+
+**Decision:** Raw SQL in migration `20260924120000_billing_integrity`, the same way the init migration adds the appointment `EXCLUDE` constraints:
+- **CHECK** `InvoiceItem.lineTotal = quantity × unitPrice` and `quantity > 0`.
+- **CHECK** `Invoice.total = subtotal + tax − discount`, with `total`, `tax`, `discount` all `≥ 0`.
+- **CHECK** `Payment.amount > 0`.
+- **A deferred constraint trigger** (`DEFERRABLE INITIALLY DEFERRED`, on both `Invoice` and `InvoiceItem`) that verifies `Invoice.subtotal = SUM(items.lineTotal)` at commit. It's deferred so a transaction can insert an item and then recompute the totals.
+- **A BEFORE trigger** that makes line items of any non-DRAFT invoice immutable. The only exception is appending a credit (negative) line to a FINALIZED/PARTIALLY_PAID invoice.
+
+`tax` and `discount` stay 0 (no API sets them). Discounts and corrections are credit lines.
+
+**Rationale:** The application computes totals itself (`ChargesService.recomputeTotals`) and never accepts them from a client. The database is an independent second line, which catches an application bug or a direct write. That was verified by deliberately making the application compute a wrong total: the database rejected every commit (21 e2e failures).
+
+**Consequences:** Test teardown can't delete a non-DRAFT invoice's items directly. `test/helpers/billing-cleanup.ts` reopens invoices to DRAFT and deletes items and invoices in one transaction.
+
+---
+
+## D-029 — Payment flow: pre-created PENDING payment, checkout-reference idempotency, client totals rejected (Phase 10)
+
+**Context:** FR-BILL-004/005 and SEC-PAY-001..003: only a signature-verified webhook or a staff cash action may change payment state, and a redelivered event must not double-apply. A webhook has to be matched back to exactly one invoice.
+
+**Decision:**
+- **Checkout creates the `Payment` first.** `POST /invoices/:id/checkout-session` creates a `PENDING` Payment for the server-computed balance *before* calling the provider, and sends its id in the provider metadata (Stripe `metadata`, Razorpay `notes`). The provider's checkout reference (Stripe Checkout Session id / Razorpay order id) is then stored in `Payment.providerEventId`, which is unique. FR-BILL-005 allows "provider event/reference ID"; the checkout reference is the stronger key, since it also dedupes *different* event types for the same payment (e.g. Razorpay `payment.captured` and `order.paid`).
+- **Settlement is a conditional `PENDING → SUCCEEDED/FAILED` update under the invoice row lock.** Only the first delivery can apply funds. Later or duplicate deliveries are `200` no-ops (not `4xx`, so providers don't retry forever), proven by sequential and concurrent duplicate tests.
+- **A validly signed event that matches no pending payment** (a foreign checkout, or a reference/payment-id mismatch) is acknowledged with 200, never applied, and logged for reconciliation.
+- **Invoice status is always derived** (`InvoiceLedgerService`): the sum of SUCCEEDED payments against the total gives FINALIZED / PARTIALLY_PAID / PAID. A provider-reported amount that differs from the expected one is recorded as actually captured and logged.
+- **Client-supplied `total`/`lineTotal` fields are rejected with 400** by the global `forbidNonWhitelisted` pipe, rather than silently ignored as `docs/10-TESTING-STRATEGY.md` §3 #6 phrases it. That's stricter than the scenario asks, and the test asserts the stored total is unchanged either way.
+- **Only identifiers and amounts are persisted from provider payloads** (`rawPayloadSanitized`: eventId, eventType, reference, amountMinor, currency), never card, customer, or contact data. `Stripe-Signature`/`X-Razorpay-Signature` headers are redacted from request logs.
+
+**Consequences:** An abandoned checkout leaves a PENDING row until Stripe's `checkout.session.expired` marks it FAILED (Razorpay has no expiry event, so those stay PENDING). An online payment completed after the balance was already settled by cash is recorded (the invoice stays PAID) and needs a manual refund. Refunds are out of scope for v1.
+
+---
+
+## D-030 — Payment provider configuration, test-mode enforcement, and what could not be live-verified (Phase 10)
+
+**Context:** SEC-PAY-004 allows only test-mode credentials. No Stripe or Razorpay test keys exist in this development environment or CI.
+
+**Decision:**
+- **Env validation refuses to boot with a live key:** `STRIPE_SECRET_KEY` must match `sk_test_...` and `RAZORPAY_KEY_ID` must match `rzp_test_...` when set.
+- **All provider settings are optional.** An unconfigured provider makes checkout return `503 PAYMENT_PROVIDER_UNAVAILABLE` (new error code), and its webhook fail closed with `400 WEBHOOK_SIGNATURE_INVALID`.
+- **The outbound half is its own injectable (`CheckoutClient`).** It creates the Stripe Checkout Session or Razorpay order. The e2e suite replaces *only* this network hop. Signature verification (`PaymentWebhookVerifier`) always runs through the real `stripe.webhooks.constructEvent` and `Razorpay.validateWebhookSignature` against real signatures, including inside the Docker image.
+
+**Consequences:** The real `CheckoutClient` calls (`stripe.checkout.sessions.create`, `razorpay.orders.create`) have **not been executed against the providers' test APIs** and are recorded as UNVERIFIED until test keys are supplied. Everything downstream of them (PENDING payment, webhook verification, settlement, idempotency) is verified. Receipts: the payment record (`paymentId` is the receipt reference) plus a `PAYMENT_RECEIVED` `Notification` row to the patient (D-020 scoping; dispatch is Phase 11). A downloadable receipt PDF is deferred to the Phase 12 portal.
+
+---
+
+## D-031 — Billing RBAC interpretation and endpoints beyond the original index (Phase 10)
+
+**Context:** `docs/07-RBAC-MATRIX.md` §3.8 gives Hospital Admin 🟡 "own hospital" on view and a 🟡 "own hospital, read" on reconciliation, Receptionist 🟡 "cash only," and Accountant 🟡 "cash/reconciliation" for initiating payment. The dashboards in `docs/04-UI-UX.md` §4 need "pending draft invoices" and "outstanding invoices" queues.
+
+**Decision:**
+- Receptionist and Accountant create invoices, add manual lines (ROOM/OTHER only; CONSULTATION/LAB/PHARMACY lines are system-created), finalize, and record cash.
+- Hospital Admin is read-only (view and list).
+- The Patient views their own invoices and starts online checkout; another patient's invoice is 404.
+- No other role has billing access, and Super Admin has none.
+- `GET /invoices?status=&patientId=&appointmentId=` (paginated, Receptionist/Accountant/Hospital Admin) is added as the reconciliation/work-queue read. Financial reports and analytics remain Phase 13.
+
+**Consequences:** Documented in `docs/08-API-CONTRACT.md` §4.9.

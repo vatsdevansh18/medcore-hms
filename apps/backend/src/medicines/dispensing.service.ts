@@ -1,5 +1,11 @@
 import { HttpStatus, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { ApiErrorCode, MedicineBatchStatus, PrescriptionStatus } from "@medcore/types";
+import type { Prisma } from "@prisma/client";
+import {
+  ApiErrorCode,
+  InvoiceItemSourceType,
+  MedicineBatchStatus,
+  PrescriptionStatus,
+} from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
@@ -8,6 +14,7 @@ import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.in
 import type { DispenseDto, DispenseItemDto } from "./dto/dispense.dto";
 import { StockService } from "./stock.service";
 import { MedicinesService } from "./medicines.service";
+import { ChargesService, type ChargeInput } from "../billing/charges.service";
 
 interface BatchRow {
   id: string;
@@ -15,6 +22,7 @@ interface BatchRow {
   expiryDate: Date;
   quantityOnHand: number;
   status: string;
+  mrp: Prisma.Decimal;
 }
 
 interface Allocation {
@@ -53,6 +61,7 @@ export class DispensingService {
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly stock: StockService,
     private readonly medicines: MedicinesService,
+    private readonly charges: ChargesService,
   ) {}
 
   async dispense(prescriptionId: string, dto: DispenseDto, caller: AuthenticatedUser) {
@@ -83,7 +92,10 @@ export class DispensingService {
 
         const prescription = await tx.prescription.findUniqueOrThrow({
           where: { id: prescriptionId },
-          include: { items: true },
+          include: {
+            items: { include: { medicine: { select: { name: true } } } },
+            medicalRecord: { select: { appointmentId: true } },
+          },
         });
         if (
           prescription.status === PrescriptionStatus.CANCELLED ||
@@ -140,6 +152,7 @@ export class DispensingService {
                 expiryDate: true,
                 quantityOnHand: true,
                 status: true,
+                mrp: true,
               },
             });
             batchesByMedicine.set(medicineId, batches);
@@ -147,6 +160,8 @@ export class DispensingService {
           allocations.push(...this.allocate(line, medicineId, batches, today));
         }
 
+        const batchById = new Map([...batchesByMedicine.values()].flat().map((b) => [b.id, b]));
+        const pharmacyCharges: ChargeInput[] = [];
         for (const a of allocations) {
           const batch = await tx.medicineBatch.update({
             where: { id: a.batchId },
@@ -158,13 +173,22 @@ export class DispensingService {
               data: { status: MedicineBatchStatus.DEPLETED },
             });
           }
-          await tx.dispenseRecord.create({
+          const record = await tx.dispenseRecord.create({
             data: {
               prescriptionItemId: a.prescriptionItemId,
               medicineBatchId: a.batchId,
               quantity: a.quantity,
               dispensedBy: caller.sub,
             },
+          });
+          // FR-BILL-001: billed per dispense record at the dispensed batch's MRP.
+          const drawnFrom = batchById.get(a.batchId)!;
+          pharmacyCharges.push({
+            sourceType: InvoiceItemSourceType.PHARMACY,
+            sourceId: record.id,
+            description: `${itemsById.get(a.prescriptionItemId)!.medicine.name} (batch ${drawnFrom.batchNumber})`,
+            quantity: a.quantity,
+            unitPrice: drawnFrom.mrp,
           });
         }
 
@@ -189,6 +213,16 @@ export class DispensingService {
         });
 
         await this.stock.evaluateLowStock(tx, hospitalId, medicineIds, today);
+
+        // Lock order continues prescription -> medicines -> appointment ->
+        // invoice. If the visit's invoice is already finalized, this opens a
+        // supplementary draft (docs/11-DECISIONS.md D-027).
+        await this.charges.addCharges(
+          tx,
+          hospitalId,
+          prescription.medicalRecord.appointmentId,
+          pharmacyCharges,
+        );
       }),
     );
 

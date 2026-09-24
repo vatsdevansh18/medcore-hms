@@ -20,6 +20,7 @@ import { PRISMA_CLIENT } from "../src/prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../src/prisma/prisma-client.factory";
 import { TenantContext } from "../src/common/tenancy/tenant-context";
 import { configureApp } from "../src/common/bootstrap/configure-app";
+import { purgeBilling } from "./helpers/billing-cleanup";
 import { ExpiryScanService } from "../src/medicines/expiry-scan.service";
 import { MedicineExpiryScanScheduler } from "../src/queue/medicine-expiry-scan.scheduler";
 import { MEDICINE_EXPIRY_SCAN_CRON } from "../src/queue/queue.constants";
@@ -393,6 +394,7 @@ describe("Pharmacy (e2e)", () => {
       await prisma.medicineBatch.deleteMany({ where });
       await prisma.medicine.deleteMany({ where });
       await prisma.medicalRecord.deleteMany({ where });
+      await purgeBilling(prisma, createdHospitalIds);
       await prisma.appointment.deleteMany({ where });
       await prisma.doctorProfile.deleteMany({ where });
       await prisma.patientProfile.deleteMany({ where });

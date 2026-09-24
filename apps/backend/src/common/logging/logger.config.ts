@@ -17,6 +17,10 @@ const SENSITIVE_FIELD_PATHS = [
   "req.headers.authorization",
   "req.headers.cookie",
   'req.headers["set-cookie"]',
+  // Phase 10: provider webhook signatures (SEC-PAY-002). Not secrets
+  // themselves, but no reason to keep them in log storage.
+  'req.headers["stripe-signature"]',
+  'req.headers["x-razorpay-signature"]',
   "req.body.password",
   "req.body.newPassword",
   "req.body.code",
