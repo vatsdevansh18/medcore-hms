@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ThrottlerModule } from "@nestjs/throttler";
+import { EventEmitterModule } from "@nestjs/event-emitter";
 import { LoggerModule } from "nestjs-pino";
 import { validateEnv } from "./config/env.validation";
 import { buildLoggerConfig } from "./common/logging/logger.config";
@@ -21,6 +22,8 @@ import { MedicinesModule } from "./medicines/medicines.module";
 import { PrescriptionsModule } from "./prescriptions/prescriptions.module";
 import { LabModule } from "./lab/lab.module";
 import { BillingModule } from "./billing/billing.module";
+import { MessagingModule } from "./common/messaging/messaging.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { JwtAuthGuard } from "./auth/guards/jwt-auth.guard";
 import { RolesGuard } from "./auth/guards/roles.guard";
 import { AppThrottlerGuard } from "./common/throttler/app-throttler.guard";
@@ -59,8 +62,12 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
         storage,
       }),
     }),
+    // The in-process event bus (docs/03-ARCHITECTURE.md §7). Only the
+    // notification outbox signal travels on it today (D-032).
+    EventEmitterModule.forRoot(),
     PrismaModule,
     RedisModule,
+    MessagingModule,
     InfraModule,
     HealthModule,
     AuthModule,
@@ -75,6 +82,7 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
     PrescriptionsModule,
     LabModule,
     BillingModule,
+    NotificationsModule,
   ],
   providers: [
     // Order matters: throttling and authentication happen before RBAC, and

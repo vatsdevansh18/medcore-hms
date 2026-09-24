@@ -2,12 +2,12 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
   MedicineBatchStatus,
-  NotificationChannel,
   NotificationType,
   UserRole,
   UserStatus,
 } from "@medcore/types";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
+import { NotificationsService } from "../notifications/notifications.service";
 
 /** The subset of the (extended) client both the root client and an
  * interactive-transaction client expose — lets every helper here run
@@ -30,6 +30,8 @@ export const STOCK_ALERT_RECIPIENT_ROLES: UserRole[] = [
 @Injectable()
 export class StockService {
   private readonly logger = new Logger(StockService.name);
+
+  constructor(private readonly notifications: NotificationsService) {}
 
   /**
    * Row-locks the given `Medicine` rows for the rest of the caller's
@@ -108,12 +110,13 @@ export class StockService {
       const available = await this.availableQuantity(db, medicineId, today);
 
       if (available < medicine.reorderLevel) {
+        const crossedAt = new Date();
         const claim = await db.medicine.updateMany({
           where: { id: medicineId, lowStockAlertedAt: null },
-          data: { lowStockAlertedAt: new Date() },
+          data: { lowStockAlertedAt: crossedAt },
         });
         if (claim.count === 1) {
-          await this.notifyLowStock(db, hospitalId, medicine, available);
+          await this.notifyLowStock(db, hospitalId, medicine, available, crossedAt);
           alerted.push(medicineId);
         }
       } else if (medicine.lowStockAlertedAt) {
@@ -141,16 +144,18 @@ export class StockService {
   }
 
   /**
-   * Persists one `Notification` row per recipient — the same "real row now,
-   * multi-channel dispatch in Phase 11" scoping as FR-LAB-005
-   * (docs/11-DECISIONS.md D-020). Written inside the caller's transaction,
-   * so an alert exists if and only if the latch was claimed.
+   * Raises the low-stock alert event (brief §7.8: Email + In-app, staff
+   * only) inside the caller's transaction, so an alert exists if and only
+   * if the latch was claimed (D-022). The crossing time is part of the
+   * dedupe key: each crossing is its own event. Delivery happens after
+   * commit (docs/11-DECISIONS.md D-032); the caller publishes.
    */
   private async notifyLowStock(
     db: PharmacyDb,
     hospitalId: string,
     medicine: { id: string; name: string; reorderLevel: number; unit: string },
     available: number,
+    crossedAt: Date,
   ): Promise<void> {
     const recipients = await this.alertRecipientIds(db);
     if (recipients.length === 0) {
@@ -159,19 +164,17 @@ export class StockService {
       );
       return;
     }
-    await db.notification.createMany({
-      data: recipients.map((recipientUserId) => ({
-        hospitalId,
-        recipientUserId,
-        type: NotificationType.LOW_STOCK_ALERT,
-        title: `Low stock: ${medicine.name}`,
-        body:
-          `${medicine.name} is below its reorder level: ${available} ${medicine.unit} available, ` +
-          `reorder level ${medicine.reorderLevel}.`,
-        channels: [NotificationChannel.IN_APP],
-        relatedEntityType: "Medicine",
-        relatedEntityId: medicine.id,
-      })),
+    await this.notifications.record(db, {
+      type: NotificationType.LOW_STOCK_ALERT,
+      hospitalId,
+      recipientUserIds: recipients,
+      title: `Low stock: ${medicine.name}`,
+      body:
+        `${medicine.name} is below its reorder level: ${available} ${medicine.unit} available, ` +
+        `reorder level ${medicine.reorderLevel}.`,
+      relatedEntityType: "Medicine",
+      relatedEntityId: medicine.id,
+      dedupeKey: `${NotificationType.LOW_STOCK_ALERT}:${medicine.id}:${crossedAt.toISOString()}`,
     });
   }
 }

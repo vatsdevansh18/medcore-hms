@@ -159,6 +159,7 @@ describe("Appointments (e2e)", () => {
       await Promise.all(
         createdAppointmentIds.map((id) => reminderQueue.cancelReminders(id).catch(() => undefined)),
       );
+      await prisma.notification.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.appointment.deleteMany({ where: { hospitalId } });
       await prisma.doctorAvailabilityException.deleteMany({ where: { doctorId: doctorProfileId } });
       await prisma.doctorAvailability.deleteMany({ where: { doctorId: doctorProfileId } });

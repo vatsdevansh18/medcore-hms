@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { ChargesService } from "./charges.service";
 import { InvoiceLedgerService } from "./invoice-ledger.service";
 import { InvoicesService } from "./invoices.service";
@@ -13,7 +14,7 @@ import { PaymentWebhookVerifier } from "./payments/payment-webhook-verifier";
  * `ChargesService` is exported so clinical modules (EMR, Lab, Pharmacy) can
  * add charges inside their own transactions (FR-BILL-001). */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, NotificationsModule],
   controllers: [InvoicesController, PaymentWebhooksController],
   providers: [
     ChargesService,

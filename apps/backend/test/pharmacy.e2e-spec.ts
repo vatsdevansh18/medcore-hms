@@ -1024,7 +1024,8 @@ describe("Pharmacy (e2e)", () => {
         [adminUserId, pharmacistUserId, pharmacist2UserId].sort(),
       );
       expect(first.every((n) => n.hospitalId === hospitalId)).toBe(true);
-      expect(first[0].channels).toEqual([NotificationChannel.IN_APP]);
+      // Brief §7.8 trigger table: "Low stock alert (staff only) — Email + In-app" (Phase 11).
+      expect(first[0].channels).toEqual([NotificationChannel.EMAIL, NotificationChannel.IN_APP]);
 
       // Further drops and repeated reads while still low: no new alerts.
       await dispense(rx.id, [{ prescriptionItemId: itemId, quantity: 1 }]).expect(201); // 7

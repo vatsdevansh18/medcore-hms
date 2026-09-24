@@ -1,12 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import {
-  InvoiceStatus,
-  NotificationChannel,
-  NotificationType,
-  PaymentStatus,
-} from "@medcore/types";
+import { InvoiceStatus, NotificationType, PaymentStatus } from "@medcore/types";
 import type { BillingDb } from "./charges.service";
+import { NotificationsService } from "../notifications/notifications.service";
 
 /** Statuses whose balance can still change through payments or credits. */
 const PAYABLE_STATUSES: string[] = [InvoiceStatus.FINALIZED, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID];
@@ -27,6 +23,8 @@ export interface InvoiceBalance {
 @Injectable()
 export class InvoiceLedgerService {
   private readonly logger = new Logger(InvoiceLedgerService.name);
+
+  constructor(private readonly notifications: NotificationsService) {}
 
   async amountPaid(db: BillingDb, invoiceId: string): Promise<Prisma.Decimal> {
     const agg = await db.payment.aggregate({
@@ -74,11 +72,11 @@ export class InvoiceLedgerService {
     return { ...current, status: next };
   }
 
-  /** FR-BILL-006 "triggers a receipt notification": one `Notification` row
-   * for the patient's portal account, same real-row-now, dispatch-in-Phase-11
-   * scoping as D-020/D-025. The payment id is the receipt reference. A
-   * patient without a portal account gets none (the same Phase 4 limitation
-   * as lab results). */
+  /** FR-BILL-006 "triggers a receipt notification" (brief §7.8 "Payment
+   * received": Email + SMS). Raised inside the settling transaction, one
+   * per payment (the payment id is the dedupe key and the receipt
+   * reference), and delivered after commit (D-032); the caller publishes.
+   * A patient without a portal account gets none (the Phase 4 limitation). */
   async notifyPaymentReceived(
     db: BillingDb,
     params: {
@@ -92,21 +90,37 @@ export class InvoiceLedgerService {
       balance: InvoiceBalance;
     },
   ): Promise<void> {
-    if (!params.patientUserId) return;
-    await db.notification.create({
-      data: {
-        hospitalId: params.hospitalId,
-        recipientUserId: params.patientUserId,
-        type: NotificationType.PAYMENT_RECEIVED,
-        title: "Payment received",
-        body:
-          `Received ${params.currency} ${params.amount.toFixed(2)} by ${params.method}. ` +
-          `Receipt ${params.paymentId}. Invoice status: ${params.balance.status}, ` +
-          `balance due ${params.currency} ${params.balance.balanceDue.toFixed(2)}.`,
-        channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
-        relatedEntityType: "Payment",
-        relatedEntityId: params.paymentId,
-      },
+    await this.notifications.record(db, {
+      type: NotificationType.PAYMENT_RECEIVED,
+      hospitalId: params.hospitalId,
+      recipientUserIds: [params.patientUserId],
+      title: "Payment received",
+      body:
+        `Received ${params.currency} ${params.amount.toFixed(2)} by ${params.method}. ` +
+        `Receipt ${params.paymentId}. Invoice status: ${params.balance.status}, ` +
+        `balance due ${params.currency} ${params.balance.balanceDue.toFixed(2)}.`,
+      relatedEntityType: "Payment",
+      relatedEntityId: params.paymentId,
+      dedupeKey: `${NotificationType.PAYMENT_RECEIVED}:${params.paymentId}`,
+    });
+  }
+
+  /** Brief §7.8 "Invoice generated" (Email + In-app), raised when an
+   * invoice is finalized: that's when its amount becomes binding and
+   * payable (FR-BILL-002). One per invoice. */
+  async notifyInvoiceGenerated(
+    db: BillingDb,
+    params: { hospitalId: string; invoiceId: string; patientUserId: string | null; total: Prisma.Decimal; currency: string },
+  ): Promise<void> {
+    await this.notifications.record(db, {
+      type: NotificationType.INVOICE_GENERATED,
+      hospitalId: params.hospitalId,
+      recipientUserIds: [params.patientUserId],
+      title: "New invoice",
+      body: `An invoice for ${params.currency} ${params.total.toFixed(2)} is ready. Invoice ${params.invoiceId}.`,
+      relatedEntityType: "Invoice",
+      relatedEntityId: params.invoiceId,
+      dedupeKey: `${NotificationType.INVOICE_GENERATED}:${params.invoiceId}`,
     });
   }
 }

@@ -6,7 +6,7 @@
 
 ## 1. Identifier Scheme
 
-`SEC-AUTHN-*` authentication · `SEC-AUTHZ-*` authorization/RBAC · `SEC-TENANT-*` tenancy · `SEC-DATA-*` data protection/encryption · `SEC-INPUT-*` input validation/injection/XSS · `SEC-NET-*` network/transport/headers · `SEC-AUDIT-*` audit logging · `SEC-FILE-*` file upload · `SEC-PAY-*` payment security.
+`SEC-AUTHN-*` authentication · `SEC-AUTHZ-*` authorization/RBAC · `SEC-TENANT-*` tenancy · `SEC-DATA-*` data protection/encryption · `SEC-INPUT-*` input validation/injection/XSS · `SEC-NET-*` network/transport/headers · `SEC-AUDIT-*` audit logging · `SEC-FILE-*` file upload · `SEC-PAY-*` payment security · `SEC-NOTIF-*` notifications & real-time (Phase 11).
 
 ## 2. Threat Model Summary (STRIDE-Oriented)
 
@@ -84,6 +84,14 @@
 - **SEC-PAY-002** — Webhook signature verification uses the provider's SDK-provided verification function against the raw request body (captured before JSON parsing, since signature verification is byte-exact) and the provider's webhook secret from environment configuration.
 - **SEC-PAY-003** — Webhook idempotency: `Payment.providerEventId` is unique; a redelivered event is detected and treated as a no-op success response (still `200`, so the provider does not retry indefinitely), never processed twice.
 - **SEC-PAY-004** — Only Stripe/Razorpay **test mode** credentials are used throughout development and the demo deployment; no live payment processing occurs in this project.
+
+## 11a. Notification & Real-Time Security (`SEC-NOTIF`, added Phase 11)
+
+- **SEC-NOTIF-001** — The Socket.IO `notifications` namespace authenticates every handshake with the same access token as the REST API (signature and expiry, and the account must not be disabled or deleted), with one generic `UNAUTHENTICATED` error for every failure. The server joins a socket only to its own `user:{id}` room; there are no client-to-server handlers, so a client can't subscribe to another user's room. A socket is disconnected when its token expires.
+- **SEC-NOTIF-002** — `GET /notifications/me` and `PATCH /notifications/:id/read` are scoped to `recipientUserId = caller` on top of tenant scoping. Anyone else's notification, cross-tenant or not, is a 404. Responses and socket payloads carry an explicit field list only (`NotificationView`): never recipient contact details, the hospital id, or the dedupe key.
+- **SEC-NOTIF-003** — Clinically sensitive notifications (lab results, prescriptions) carry no clinical detail over email or SMS, only a prompt to sign in. Auth secrets (OTPs, reset tokens) are never persisted in `Notification` rows or queue job data, and are logged only outside production.
+- **SEC-NOTIF-004** — SMS is sent only to a phone number the user has verified. Outside production, email (and SMS, if configured) is redirected to a sandbox recipient, so development credentials can never reach a real person.
+- **SEC-NOTIF-005** — Bull Board (queue inspection) is off by default, refused by env validation in production, and when enabled in dev requires its own HTTP Basic credential (12+ character password, constant-time comparison).
 
 ## 12. Dependency & Supply Chain Hygiene
 

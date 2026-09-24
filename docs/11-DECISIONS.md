@@ -279,6 +279,8 @@ Each entry: context, alternatives considered, decision, rationale, consequences.
 
 **Consequences:** There is no `GET /notifications/me` endpoint yet (that's Phase 11 too), so Phase 8's e2e tests assert the `Notification` row via a direct Prisma query, not through an API response. Phase 11 should treat `LabService.notifyResultApproved` as the first of several call sites needing migration onto the real event-bus/dispatcher pattern, alongside wherever Phase 9–10 add their own trigger points.
 
+
+**Phase 11 update:** real multi-channel dispatch is now wired, and this producer records through `NotificationsService` (D-032).
 ---
 
 ## D-021 — `GET /lab-orders/:id` result-visibility gating interpreted per-item, not per-endpoint (Phase 8)
@@ -350,6 +352,8 @@ Read endpoints (`GET /medicines/low-stock`) never touch the latch. A newly creat
 
 **Consequences:** Phase 11 must replace `EXPIRY_DIGEST_DELIVERY_PORT`'s stub with the real email worker, and migrate `StockService`'s low-stock notification rows onto the event bus alongside `LabService.notifyResultApproved`.
 
+
+**Phase 11 update:** real multi-channel dispatch is now wired, and this producer records through `NotificationsService` (D-032).
 ---
 
 ## D-026 — Redis caching of medicine inventory counts deferred (Phase 9)
@@ -440,3 +444,56 @@ Read endpoints (`GET /medicines/low-stock`) never touch the latch. A newly creat
 - `GET /invoices?status=&patientId=&appointmentId=` (paginated, Receptionist/Accountant/Hospital Admin) is added as the reconciliation/work-queue read. Financial reports and analytics remain Phase 13.
 
 **Consequences:** Documented in `docs/08-API-CONTRACT.md` §4.9.
+
+---
+
+## D-032 — Notifications use a transactional outbox, with the in-process event bus as the wake-up signal (Phase 11)
+
+**Context:** FR-NOTIF-001 and `docs/03-ARCHITECTURE.md` §7 describe services raising a domain event "via an in-process event emitter after the triggering transaction commits," with a `NotificationDispatcher` fanning it out to one queue per channel. An in-process emit is lost if the process exits between commit and emit, and several producers already relied on atomicity with their trigger: the low-stock latch (D-022, "an alert exists if and only if the latch was claimed"), one receipt per settled payment, and the per-day expiry digest (D-025).
+
+**Decision:**
+- **Every trigger records its event inside the triggering transaction** via `NotificationsService.record(tx, event)`: one `Notification` row per recipient. The rows *are* the outbox. Channels come from a single trigger table (`src/notifications/notification-triggers.ts`, brief §7.8), never from the producer.
+- **Idempotency:** `Notification.dedupeKey` (unique) is `<event key>:<recipient>`, e.g. `APPOINTMENT_CONFIRMED:<appointmentId>:<userId>`, `LOW_STOCK_ALERT:<medicineId>:<crossing time>`, `APPOINTMENT_REMINDER:<appointmentId>:<window>`. A retried request, a concurrent duplicate, or a re-run job inserts nothing (`createMany … skipDuplicates`).
+- **After commit, the caller calls `publish()`.** That emits `notifications.committed` on the in-process event bus (`@nestjs/event-emitter`). `NotificationDispatcher` listens, reads undispatched rows, enqueues one BullMQ job per channel with the deterministic id `<notificationId>-<channel>` (the architecture's idempotency key), then sets `dispatchedAt`. Enqueue-then-mark plus deterministic job ids make a crash between the two steps, or two instances draining at once, harmless.
+- **A sweep job** (`notification-outbox`, every 30s) re-drains rows older than 10s that are still undispatched. It covers a lost signal, a Redis blip, or a process exit.
+- **Workers:** one queue and worker per channel (`email`, `sms`, `in-app`). Each has 3 attempts with exponential backoff; the failed set is the dead-letter store (kept 30 days, visible in Bull Board). There is one `NotificationDeliveryLog` row per attempt. SENT and SKIPPED are terminal; SKIPPED is a new status meaning deliberately not sent. A provider's "your request is wrong" error (4xx other than 408/429) fails fast without retries.
+- **In-app history** (`GET /notifications/me`) lists only rows whose channels include IN_APP. The brief's email/SMS-only events (payment received, appointment reminder) aren't part of it.
+
+**Trigger interpretations:**
+- *Prescription ready at pharmacy* fires when the prescription is issued, since an issued prescription is immediately dispensable at the hospital's own pharmacy.
+- *Invoice generated* fires on finalize, when the amount becomes binding (FR-BILL-002).
+- *Appointment reminder* covers both brief windows (24h and 1h, §7.2) with the §7.8 channels.
+- *Medicine expiry digest* isn't in the brief's table; it uses Email + In-app, matching the low-stock alert.
+
+Two Phase 9/10 channel choices change to match the brief:
+- low-stock: In-app → Email + In-app;
+- payment received: In-app + Email → Email + SMS.
+
+**Consequences:** Two conditional updates were added so that concurrent duplicates fail rather than both apply: appointment status (update `WHERE status = <validated status>`, else 409) and lab result approval (`WHERE status = RESULT_UPLOADED`, else 409). Lab approval moved from an array `$transaction` into an interactive one so its notification is atomic with it.
+
+**Rejected:** emitting domain events only after commit, with no persisted outbox (loses events on crash and breaks D-022's guarantee). A separate `DomainEvent` outbox table (the `Notification` row already carries everything the dispatcher needs).
+
+---
+
+## D-033 — Email/SMS providers, sandboxing, and auth-secret delivery (Phase 11)
+
+**Context:** The brief names Resend (email) and Twilio (SMS). Brief §13/§15 require sandbox/test mode throughout development. This environment has no Resend or Twilio credentials. The Phase 3 OTP stub logged codes instead of sending them.
+
+**Decision:**
+- **Provider ports:** `EMAIL_SENDER`/`SMS_SENDER` are implemented by `ResendEmailSender` and `TwilioSmsSender` (`src/common/messaging`). Every setting is optional. An unconfigured provider makes that channel's deliveries `SKIPPED: PROVIDER_NOT_CONFIGURED`, never a false SENT. Resend gets an idempotency key (`<notificationId>-EMAIL`), so a retried job never sends twice.
+- **Sandbox redirect outside production:** every email goes to `EMAIL_SANDBOX_RECIPIENT` (default Resend's test inbox `delivered@resend.dev`). If `SMS_SANDBOX_RECIPIENT` is set, every SMS goes there; Twilio test credentials never deliver regardless.
+- **SMS only to a verified phone** (`phoneVerifiedAt` set, FR-AUTH-005). Otherwise the delivery is `SKIPPED: NO_PHONE / PHONE_NOT_VERIFIED`. Disabled or deleted recipients are `SKIPPED: RECIPIENT_INACTIVE` on every channel.
+- **Content minimisation:** lab results and prescriptions send a generic "sign in to view" text by email/SMS. The emergency body carries no patient detail. In-app, behind authentication, keeps the full text.
+- **Auth secrets (email OTP, SMS OTP, password-reset link) bypass the outbox and queues** and are sent synchronously by `MessagingOtpDelivery`. The user is waiting, and a secret must never be persisted in a `Notification` row (readable via `/notifications/me`) or in BullMQ job data (kept in Redis for days). Send failures are logged, never thrown, which keeps `forgot-password` uniform (SEC-AUTHN-006). Outside production the code is also logged, as in Phase 3, because sandboxed email can't be read by the developer.
+
+**Consequences:** The live Resend/Twilio API calls are **UNVERIFIED** until test credentials are supplied. The adapters load and construct inside the Alpine image, and every other part of the pipeline is verified with fakes that replace only the network hop (the same approach as D-030).
+
+---
+
+## D-034 — The e2e suite runs in one Jest worker (Phase 11)
+
+**Context:** From Phase 11, every spec process runs notification workers and an outbox dispatcher against the same Redis and Postgres. Run in parallel, one spec's dispatcher or workers could pick up another spec's jobs and deliver them through the real (unconfigured) senders instead of that spec's fakes, which makes assertions nondeterministic. The same sharing is correct in production, where all instances are configured identically.
+
+**Decision:** `test/jest-e2e.json` sets `"maxWorkers": 1`. The full suite still takes about 40s.
+
+**Rejected:** per-spec BullMQ prefixes. They isolate the queues, but not the shared outbox table that every dispatcher drains.

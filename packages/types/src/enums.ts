@@ -160,14 +160,27 @@ export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 export const NotificationChannel = { EMAIL: "EMAIL", SMS: "SMS", IN_APP: "IN_APP" } as const;
 export type NotificationChannel = (typeof NotificationChannel)[keyof typeof NotificationChannel];
 
-export const NotificationStatus = { PENDING: "PENDING", SENT: "SENT", FAILED: "FAILED" } as const;
+/** Per-attempt delivery outcome (`NotificationDeliveryLog.status`). SKIPPED
+ * means deliberately not sent (no contact, unverified phone, provider not
+ * configured, recipient disabled) and is never retried. */
+export const NotificationStatus = {
+  PENDING: "PENDING",
+  SENT: "SENT",
+  FAILED: "FAILED",
+  SKIPPED: "SKIPPED",
+} as const;
 export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus];
 
 /** `Notification.type` values. `Notification.type` is a plain `String`
  * column (not a Prisma enum), so these are the canonical spellings shared
  * by every producer instead of ad hoc string literals. */
 export const NotificationType = {
+  APPOINTMENT_CONFIRMED: "APPOINTMENT_CONFIRMED",
+  APPOINTMENT_REMINDER: "APPOINTMENT_REMINDER",
+  EMERGENCY_APPOINTMENT: "EMERGENCY_APPOINTMENT",
+  PRESCRIPTION_READY: "PRESCRIPTION_READY",
   LAB_RESULT_APPROVED: "LAB_RESULT_APPROVED",
+  INVOICE_GENERATED: "INVOICE_GENERATED",
   LOW_STOCK_ALERT: "LOW_STOCK_ALERT",
   MEDICINE_EXPIRY_DIGEST: "MEDICINE_EXPIRY_DIGEST",
   PAYMENT_RECEIVED: "PAYMENT_RECEIVED",

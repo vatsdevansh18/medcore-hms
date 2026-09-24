@@ -1,6 +1,6 @@
 import { HttpStatus, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { ApiErrorCode, AppointmentStatus, AppointmentType, UserRole } from "@medcore/types";
+import { ApiErrorCode, AppointmentStatus, AppointmentType, NotificationType, UserRole } from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
@@ -10,6 +10,8 @@ import { PaginatedResult } from "../common/pagination/paginated-result";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
 import { AvailabilityService } from "../doctors/availability.service";
 import { AppointmentReminderQueueService } from "../queue/appointment-reminder-queue.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { doctorName, formatHospitalTime } from "../notifications/notification-format";
 import type { BookAppointmentDto } from "./dto/book-appointment.dto";
 import type { CreateEmergencyAppointmentDto } from "./dto/create-emergency-appointment.dto";
 import type { UpdateAppointmentStatusDto } from "./dto/update-appointment-status.dto";
@@ -72,7 +74,13 @@ export class AppointmentsService {
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly availabilityService: AvailabilityService,
     private readonly reminderQueue: AppointmentReminderQueueService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  private async hospitalTimezone(hospitalId: string): Promise<string> {
+    const hospital = await this.prisma.hospital.findUnique({ where: { id: hospitalId }, select: { timezone: true } });
+    return hospital?.timezone ?? "Asia/Kolkata";
+  }
 
   /** Reminder scheduling/cancellation is a side effect of a status change
    * that has ALREADY committed to the database by the time this runs — a
@@ -257,25 +265,43 @@ export class AppointmentsService {
       const durationMinutes = defaultSlot?.slotDurationMinutes ?? 30;
       const scheduledEnd = new Date(scheduledStart.getTime() + durationMinutes * 60_000);
 
+      let created;
       try {
-        return await this.prisma.appointment.create({
-          data: {
+        created = await this.prisma.$transaction(async (tx) => {
+          const appointment = await tx.appointment.create({
+            data: {
+              hospitalId,
+              patientId: patient.id,
+              doctorId: doctor.id,
+              departmentId: doctor.departmentId,
+              scheduledStart,
+              scheduledEnd,
+              status: AppointmentStatus.CONFIRMED,
+              type: AppointmentType.EMERGENCY,
+              reasonForVisit: dto.reasonForVisit,
+              createdBy: caller.sub,
+            },
+            include: APPOINTMENT_INCLUDE,
+          });
+          // Brief §7.8 "Emergency appointment created": In-app + SMS to the
+          // doctor. No patient detail in the text (it may go out by SMS).
+          await this.notifications.record(tx, {
+            type: NotificationType.EMERGENCY_APPOINTMENT,
             hospitalId,
-            patientId: patient.id,
-            doctorId: doctor.id,
-            departmentId: doctor.departmentId,
-            scheduledStart,
-            scheduledEnd,
-            status: AppointmentStatus.CONFIRMED,
-            type: AppointmentType.EMERGENCY,
-            reasonForVisit: dto.reasonForVisit,
-            createdBy: caller.sub,
-          },
-          include: APPOINTMENT_INCLUDE,
+            recipientUserIds: [doctor.userId],
+            title: "Emergency appointment",
+            body: "An emergency appointment has been assigned to you, starting now. Open MedCore HMS for details.",
+            relatedEntityType: "Appointment",
+            relatedEntityId: appointment.id,
+            dedupeKey: `${NotificationType.EMERGENCY_APPOINTMENT}:${appointment.id}`,
+          });
+          return appointment;
         });
       } catch (err) {
         this.translateBookingConflict(err);
       }
+      this.notifications.publish();
+      return created;
     });
   }
 
@@ -313,20 +339,51 @@ export class AppointmentsService {
       );
     }
 
-    const updated = await TenantContext.run(
-      { hospitalId, userId: caller.sub, bypassTenancy: false },
-      () =>
-        this.prisma.appointment.update({
-          where: { id },
-          data: {
-            status: dto.status,
-            ...(dto.status === AppointmentStatus.CANCELLED
-              ? { cancelledReason: dto.cancelledReason, cancelledBy: caller.sub }
-              : {}),
-          },
-          include: APPOINTMENT_INCLUDE,
-        }),
+    const timezone = await this.hospitalTimezone(hospitalId);
+    const updated = await TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
+      this.prisma.$transaction(async (tx) => {
+        let row;
+        try {
+          // Conditional on the status the transition was validated against:
+          // of two concurrent transitions, the second fails instead of
+          // silently re-applying (and re-notifying).
+          row = await tx.appointment.update({
+            where: { id, status: appointment.status },
+            data: {
+              status: dto.status,
+              ...(dto.status === AppointmentStatus.CANCELLED
+                ? { cancelledReason: dto.cancelledReason, cancelledBy: caller.sub }
+                : {}),
+            },
+            include: APPOINTMENT_INCLUDE,
+          });
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+            throw new AppException(
+              ApiErrorCode.VALIDATION_ERROR,
+              "The appointment's status changed while this request was in flight. Reload and try again.",
+              HttpStatus.CONFLICT,
+            );
+          }
+          throw err;
+        }
+        if (dto.status === AppointmentStatus.CONFIRMED) {
+          // Brief §7.8 "Appointment confirmed": Email + SMS + In-app, patient.
+          await this.notifications.record(tx, {
+            type: NotificationType.APPOINTMENT_CONFIRMED,
+            hospitalId,
+            recipientUserIds: [row.patient.userId],
+            title: "Appointment confirmed",
+            body: `Your appointment with ${doctorName(row.doctor.user)} on ${formatHospitalTime(row.scheduledStart, timezone)} is confirmed.`,
+            relatedEntityType: "Appointment",
+            relatedEntityId: row.id,
+            dedupeKey: `${NotificationType.APPOINTMENT_CONFIRMED}:${row.id}`,
+          });
+        }
+        return row;
+      }),
     );
+    this.notifications.publish();
 
     if (dto.status === AppointmentStatus.CONFIRMED) {
       await this.safeReminderCall(

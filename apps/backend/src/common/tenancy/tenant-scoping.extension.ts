@@ -107,7 +107,9 @@ export const tenantScopingExtension = Prisma.defineExtension({
 
         if (operation === "create") {
           scopedArgs.data = injectCreateData(scopedArgs.data, store.hospitalId);
-        } else if (operation === "createMany") {
+        } else if (operation === "createMany" || operation === "createManyAndReturn") {
+          // createManyAndReturn (Prisma 5.14+) was previously unhandled and
+          // would have run with whatever hospitalId the caller supplied.
           scopedArgs.data = injectCreateData(scopedArgs.data, store.hospitalId);
         } else if (operation === "upsert") {
           injectWhere(scopedArgs, store.hospitalId);

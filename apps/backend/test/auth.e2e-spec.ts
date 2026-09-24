@@ -4,7 +4,7 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import request from "supertest";
 import { HospitalStatus, UserRole } from "@medcore/types";
 import { AppModule } from "../src/app.module";
-import { OTP_DELIVERY_PORT, type OtpDeliveryPort } from "../src/auth/services/otp-delivery.stub";
+import { OTP_DELIVERY_PORT, type OtpDeliveryPort } from "../src/auth/services/otp-delivery";
 import { Roles } from "../src/auth/decorators/roles.decorator";
 import { PRISMA_CLIENT } from "../src/prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../src/prisma/prisma-client.factory";

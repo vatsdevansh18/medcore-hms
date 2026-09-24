@@ -135,6 +135,8 @@ Two failures during development were test-authoring errors and are noted for hon
 - A receipt is the payment record plus a `PAYMENT_RECEIVED` notification row. There's no downloadable receipt PDF yet (Phase 12 portal), and no `GET /notifications/me` yet (Phase 11).
 - A patient without a portal account gets no receipt notification (the same Phase 4 limitation as lab results).
 
+- **Re-checked 2026-09-24 (start of the Phase 11 session):** `.env` still has no Stripe/Razorpay test keys, so the live checkout-creation call remains UNVERIFIED. Nothing else in this review changed.
+
 ## Technical Debt
 
 - `tax`/`discount` columns exist but no API sets them (always 0). Discounts are credit lines.

@@ -200,6 +200,7 @@ enum NotificationStatus {
   PENDING
   SENT
   FAILED
+  SKIPPED
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -934,22 +935,32 @@ model Notification {
   relatedEntityId   String?
   readAt            DateTime?
   createdAt         DateTime              @default(now())
+  /// Transactional-outbox marker (docs/11-DECISIONS.md D-032): null until the
+  /// dispatcher has enqueued this row's per-channel delivery jobs.
+  dispatchedAt      DateTime?
+  /// Per-recipient idempotency key: a retried or concurrent trigger can't
+  /// create a second notification for the same event (D-032).
+  dedupeKey         String?               @unique
 
   deliveryLogs NotificationDeliveryLog[]
 
   @@index([hospitalId])
-  @@index([recipientUserId])
+  @@index([recipientUserId, createdAt])
+  @@index([dispatchedAt, createdAt])
 }
 
 model NotificationDeliveryLog {
-  id             String              @id @default(uuid())
-  notificationId String
-  notification   Notification        @relation(fields: [notificationId], references: [id])
-  channel        NotificationChannel
-  provider       String?
-  status         NotificationStatus  @default(PENDING)
-  errorMessage   String?
-  attemptedAt    DateTime            @default(now())
+  id                String              @id @default(uuid())
+  notificationId    String
+  notification      Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel           NotificationChannel
+  provider          String?
+  status            NotificationStatus  @default(PENDING)
+  /// 1-based BullMQ attempt number; one log row per attempt.
+  attempt           Int                 @default(1)
+  providerMessageId String?
+  errorMessage      String?
+  attemptedAt       DateTime            @default(now())
 
-  @@index([notificationId])
+  @@index([notificationId, channel])
 }

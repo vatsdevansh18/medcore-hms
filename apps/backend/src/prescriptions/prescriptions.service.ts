@@ -1,5 +1,5 @@
 import { HttpStatus, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { ApiErrorCode, PrescriptionStatus, UserRole } from "@medcore/types";
+import { ApiErrorCode, NotificationType, PrescriptionStatus, UserRole } from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
@@ -7,6 +7,7 @@ import { AppException } from "../common/errors/app-exception";
 import { S3Service } from "../common/storage/s3.service";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
 import { PrescriptionPdfQueueService } from "../queue/prescription-pdf-queue.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import type { CreatePrescriptionDto } from "./dto/create-prescription.dto";
 
 const PRESCRIPTION_INCLUDE = {
@@ -24,6 +25,7 @@ export class PrescriptionsService {
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly s3: S3Service,
     private readonly pdfQueue: PrescriptionPdfQueueService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private async requireHospitalId(caller: AuthenticatedUser): Promise<string> {
@@ -138,9 +140,29 @@ export class PrescriptionsService {
           });
         }
 
+        // Brief §7.8 "Prescription ready at pharmacy" (SMS + In-app). An
+        // issued prescription is immediately dispensable at this hospital's
+        // pharmacy, so issue is the "ready" moment (docs/11-DECISIONS.md
+        // D-032). No medicine names in the text (SEC-NOTIF-003).
+        const patient = await tx.patientProfile.findUnique({
+          where: { id: medicalRecord.patientId },
+          select: { userId: true },
+        });
+        await this.notifications.record(tx, {
+          type: NotificationType.PRESCRIPTION_READY,
+          hospitalId,
+          recipientUserIds: [patient?.userId],
+          title: "Prescription ready at the pharmacy",
+          body: "Your prescription has been sent to the hospital pharmacy and is ready to collect.",
+          relatedEntityType: "Prescription",
+          relatedEntityId: prescription.id,
+          dedupeKey: `${NotificationType.PRESCRIPTION_READY}:${prescription.id}`,
+        });
+
         return prescription;
       });
 
+      this.notifications.publish();
       await this.pdfQueue.enqueue(created.id);
       return created;
     });

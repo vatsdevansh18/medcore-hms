@@ -2,6 +2,8 @@ import cookieParser from "cookie-parser";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { type INestApplication, ValidationPipe } from "@nestjs/common";
 import type { NestExpressApplication } from "@nestjs/platform-express";
+import { ConfiguredIoAdapter } from "../../notifications/realtime/configured-io.adapter";
+import { mountBullBoard } from "./bull-board";
 
 /**
  * The request-handling configuration every bootstrapped Nest app must share:
@@ -44,4 +46,7 @@ export function configureApp(app: INestApplication): void {
     }),
   );
   app.setGlobalPrefix("api", { exclude: ["health", "health/ready"] });
+  // Socket.IO: CORS allow-list + Redis adapter (Phase 11, FR-NOTIF-003).
+  app.useWebSocketAdapter(new ConfiguredIoAdapter(app));
+  mountBullBoard(app);
 }

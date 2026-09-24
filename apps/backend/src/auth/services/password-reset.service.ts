@@ -9,7 +9,7 @@ import { PRISMA_CLIENT } from "../../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../../prisma/prisma-client.factory";
 import { TenantContext } from "../../common/tenancy/tenant-context";
 import { AppException } from "../../common/errors/app-exception";
-import { OTP_DELIVERY_PORT, type OtpDeliveryPort } from "./otp-delivery.stub";
+import { OTP_DELIVERY_PORT, type OtpDeliveryPort } from "./otp-delivery";
 import { TokenService } from "./token.service";
 
 const RESET_TTL_SECONDS = 60 * 60;

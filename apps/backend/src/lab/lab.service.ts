@@ -7,12 +7,12 @@ import {
   LabResultDecision,
   LabResultFlag,
   InvoiceItemSourceType,
-  NotificationChannel,
   NotificationType,
   UserRole,
 } from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import { ChargesService } from "../billing/charges.service";
+import { NotificationsService, type NotificationDb } from "../notifications/notifications.service";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
 import { AppException } from "../common/errors/app-exception";
@@ -66,6 +66,7 @@ export class LabService {
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly s3: S3Service,
     private readonly charges: ChargesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private async requireHospitalId(caller: AuthenticatedUser): Promise<string> {
@@ -295,22 +296,39 @@ export class LabService {
         : LabOrderItemStatus.REJECTED;
 
     await TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
-      this.prisma.$transaction([
-        this.prisma.labOrderItem.update({ where: { id: item.id }, data: { status: targetStatus } }),
+      this.prisma.$transaction(async (tx) => {
+        // Conditional on the status read above: of two concurrent decisions
+        // on the same item, the second finds no RESULT_UPLOADED row and
+        // fails, instead of both applying (and both notifying).
+        try {
+          await tx.labOrderItem.update({
+            where: { id: item.id, status: LabOrderItemStatus.RESULT_UPLOADED },
+            data: { status: targetStatus },
+          });
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+            throw new AppException(
+              ApiErrorCode.VALIDATION_ERROR,
+              "This result was already approved or rejected.",
+              HttpStatus.CONFLICT,
+            );
+          }
+          throw err;
+        }
         // `approvedBy`/`approvedAt` record whoever made the final QC decision
         // (approve OR reject) — the schema has no separate `rejectedBy`
         // column, and adding one for a purely descriptive rename isn't worth
         // a migration (docs/11-DECISIONS.md).
-        this.prisma.labResult.update({
+        await tx.labResult.update({
           where: { labOrderItemId: item.id },
           data: { approvedBy: caller.sub, approvedAt: new Date() },
-        }),
-      ]),
+        });
+        if (dto.decision === LabResultDecision.APPROVED) {
+          await this.notifyResultApproved(tx, order, item.id, item.labTest.name, hospitalId);
+        }
+      }),
     );
-
-    if (dto.decision === LabResultDecision.APPROVED) {
-      await this.notifyResultApproved(order, item.labTest.name, hospitalId, caller.sub);
-    }
+    this.notifications.publish();
 
     return TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
       this.prisma.labOrderItem.findUniqueOrThrow({
@@ -321,39 +339,27 @@ export class LabService {
   }
 
   /**
-   * FR-LAB-005 "notification fan-out". Full multi-channel dispatch (email/
-   * SMS workers, the in-process event bus, `NotificationDispatcher`) is
-   * Phase 11 scope per docs/03-ARCHITECTURE.md §7/§12 — until then this
-   * persists a real, queryable `Notification` row per recipient (same
-   * "real-but-partial" scoping as Phase 5's `ReminderDeliveryStub`), so the
-   * trigger itself and its data are genuine and testable even though actual
-   * email/SMS delivery is deferred.
+   * FR-LAB-005 "notification fan-out" / brief §7.5 "Patient and Doctor are
+   * notified" (Email + In-app per the trigger table). Raised in the approval
+   * transaction, one per approved item, and delivered after commit (D-032).
+   * The email carries no test name or value (SEC-NOTIF-003).
    */
   private async notifyResultApproved(
+    tx: NotificationDb,
     order: LabOrderWithChildren,
+    itemId: string,
     labTestName: string,
     hospitalId: string,
-    approvedByUserId: string,
   ): Promise<void> {
-    const recipients = [order.doctor.userId, order.patient.userId].filter(
-      (userId): userId is string => userId !== null && userId !== undefined,
-    );
-
-    await TenantContext.run({ hospitalId, userId: approvedByUserId, bypassTenancy: false }, async () => {
-      for (const recipientUserId of recipients) {
-        await this.prisma.notification.create({
-          data: {
-            hospitalId,
-            recipientUserId,
-            type: NotificationType.LAB_RESULT_APPROVED,
-            title: "Lab result approved",
-            body: `The result for "${labTestName}" is now approved and available to view.`,
-            channels: [NotificationChannel.IN_APP],
-            relatedEntityType: "LabOrder",
-            relatedEntityId: order.id,
-          },
-        });
-      }
+    await this.notifications.record(tx, {
+      type: NotificationType.LAB_RESULT_APPROVED,
+      hospitalId,
+      recipientUserIds: [order.doctor.userId, order.patient.userId],
+      title: "Lab result approved",
+      body: `The result for "${labTestName}" is now approved and available to view.`,
+      relatedEntityType: "LabOrder",
+      relatedEntityId: order.id,
+      dedupeKey: `${NotificationType.LAB_RESULT_APPROVED}:${itemId}`,
     });
   }
 

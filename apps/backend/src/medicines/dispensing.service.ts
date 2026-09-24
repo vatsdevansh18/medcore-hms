@@ -15,6 +15,7 @@ import type { DispenseDto, DispenseItemDto } from "./dto/dispense.dto";
 import { StockService } from "./stock.service";
 import { MedicinesService } from "./medicines.service";
 import { ChargesService, type ChargeInput } from "../billing/charges.service";
+import { NotificationsService } from "../notifications/notifications.service";
 
 interface BatchRow {
   id: string;
@@ -62,6 +63,7 @@ export class DispensingService {
     private readonly stock: StockService,
     private readonly medicines: MedicinesService,
     private readonly charges: ChargesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async dispense(prescriptionId: string, dto: DispenseDto, caller: AuthenticatedUser) {
@@ -225,6 +227,8 @@ export class DispensingService {
         );
       }),
     );
+    // Any low-stock alert raised above is committed now.
+    this.notifications.publish();
 
     return TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
       this.prisma.prescription.findUniqueOrThrow({

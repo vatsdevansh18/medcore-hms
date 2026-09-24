@@ -1,5 +1,6 @@
-import { plainToInstance } from "class-transformer";
+import { plainToInstance, Transform } from "class-transformer";
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -109,6 +110,63 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   RAZORPAY_WEBHOOK_SECRET: string = "";
+
+  // Phase 11: notification channels (docs/11-DECISIONS.md D-032/D-033). All
+  // optional: an unconfigured provider makes its channel's deliveries
+  // SKIPPED (PROVIDER_NOT_CONFIGURED), never a crash or a silent "sent".
+  @IsOptional()
+  @IsString()
+  RESEND_API_KEY: string = "";
+
+  @IsOptional()
+  @IsString()
+  EMAIL_FROM: string = "MedCore HMS <onboarding@resend.dev>";
+
+  // Non-production only: every email goes here instead of the real
+  // recipient (brief §13/§15). Resend's own test inbox by default.
+  @IsOptional()
+  @IsString()
+  EMAIL_SANDBOX_RECIPIENT: string = "delivered@resend.dev";
+
+  @IsOptional()
+  @IsString()
+  TWILIO_ACCOUNT_SID: string = "";
+
+  @IsOptional()
+  @IsString()
+  TWILIO_AUTH_TOKEN: string = "";
+
+  @IsOptional()
+  @Matches(/^(\+[1-9]\d{6,14})?$/, { message: "TWILIO_FROM_NUMBER must be E.164 (e.g. +15005550006)." })
+  TWILIO_FROM_NUMBER: string = "";
+
+  // Non-production only: if set, every SMS goes to this number instead.
+  @IsOptional()
+  @Matches(/^(\+[1-9]\d{6,14})?$/, { message: "SMS_SANDBOX_RECIPIENT must be E.164." })
+  SMS_SANDBOX_RECIPIENT: string = "";
+
+  // First retry delay for a failed channel job (then doubled; 3 attempts,
+  // NFR-AVAIL-002). Lowered only by the e2e suite.
+  @IsInt()
+  @Min(1)
+  NOTIFICATION_RETRY_BASE_DELAY_MS: number = 5000;
+
+  // Bull Board (dev-only queue UI, docs/03-ARCHITECTURE.md §12). Refused in
+  // production outright (SEC-NOTIF-005) and needs a password when enabled.
+  // Parsed from the raw source value: with enableImplicitConversion,
+  // class-transformer hands @Transform the already-converted value, and
+  // Boolean("false") is true (caught by the Phase 11 e2e spec).
+  @Transform(({ obj }: { obj: Record<string, unknown> }) => obj.BULL_BOARD_ENABLED === true || obj.BULL_BOARD_ENABLED === "true")
+  @IsBoolean()
+  BULL_BOARD_ENABLED: boolean = false;
+
+  @IsOptional()
+  @IsString()
+  BULL_BOARD_USERNAME: string = "admin";
+
+  @IsOptional()
+  @IsString()
+  BULL_BOARD_PASSWORD: string = "";
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
@@ -121,6 +179,15 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
   if (errors.length > 0) {
     const message = errors.map((e) => Object.values(e.constraints ?? {}).join("; ")).join(" | ");
     throw new Error(`Invalid environment configuration: ${message}`);
+  }
+
+  if (validated.BULL_BOARD_ENABLED) {
+    if (validated.NODE_ENV === "production") {
+      throw new Error("Invalid environment configuration: BULL_BOARD_ENABLED must be false in production (SEC-NOTIF-005).");
+    }
+    if (validated.BULL_BOARD_PASSWORD.length < 12) {
+      throw new Error("Invalid environment configuration: BULL_BOARD_PASSWORD (12+ characters) is required when BULL_BOARD_ENABLED=true.");
+    }
   }
 
   return validated;

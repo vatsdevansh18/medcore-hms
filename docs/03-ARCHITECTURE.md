@@ -184,6 +184,14 @@ flowchart LR
 
 In-app delivery additionally persists a `Notification` row so a client that connects later (or a different device) can fetch unread history via `GET /notifications/me`, not only receive live pushes.
 
+**As built (Phase 11, `docs/11-DECISIONS.md` D-032/D-033):**
+- The "domain event" is recorded *inside the triggering transaction* as `Notification` rows (a transactional outbox, one row per recipient, idempotent via `dedupeKey`).
+- The in-process bus (`@nestjs/event-emitter`) carries a post-commit `notifications.committed` signal. `NotificationDispatcher` then drains undispatched rows into the `email`/`sms`/`in-app` queues, with job id `<notificationId>-<channel>`.
+- A `notification-outbox` sweep every 30s recovers any row whose signal was lost.
+- The trigger table lives in code (`src/notifications/notification-triggers.ts`) and mirrors brief §7.8.
+- The Socket.IO server uses the `@socket.io/redis-adapter` (configured in `ConfiguredIoAdapter`), so a push from any instance's worker reaches the user's socket on any other instance.
+- OTP and password-reset messages are not notifications. They're sent directly and synchronously, never persisted or queued.
+
 ## 8. Appointment Booking Concurrency
 
 **Decision:** PostgreSQL `EXCLUDE` constraint using the `btree_gist` extension, not application-level optimistic retry alone. Full reasoning in `11-DECISIONS.md` D-005.
@@ -298,6 +306,8 @@ BullMQ queues, one per concern, each with its own concurrency and retry policy:
 | `pdf-generate`         | Prescription/report finalised              | 2 attempts                                                                                            | `sourceEntityId`                  |
 | `appointment-reminder` | Scheduled (repeatable job per appointment) | 3 attempts                                                                                            | `appointmentId` + reminder window |
 | `medicine-expiry-scan` | Cron, nightly (`30 0 * * *` UTC, BullMQ job scheduler; Phase 9) | N/A (idempotent scan); implemented as 3 attempts with 60s exponential backoff for transient DB/Redis faults | date-scoped (hospital-local date) |
+| `in-app`               | Notification event (Phase 11)              | 3 attempts, exponential backoff                                                                       | `notificationId` + channel        |
+| `notification-outbox`  | Repeatable, every 30s (Phase 11)           | N/A (idempotent sweep of undispatched outbox rows older than 10s)                                     | deterministic channel job ids     |
 | `webhook-processing`   | Payment webhook received                   | handled synchronously in the request, not queued — signature check must gate the HTTP response itself | `providerEventId`                 |
 
 Failed jobs after max attempts move to a dead-letter state inspectable via Bull Board (dev/staging only, never exposed in production without auth).

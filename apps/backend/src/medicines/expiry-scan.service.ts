@@ -1,15 +1,18 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { MedicineBatchStatus, NotificationChannel, NotificationType } from "@medcore/types";
+import { MedicineBatchStatus, NotificationType } from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
 import { StockService } from "./stock.service";
 import { addDays, hospitalToday, toDateKey } from "./pharmacy-date.util";
-import {
-  EXPIRY_DIGEST_DELIVERY_PORT,
-  type ExpiryDigestDeliveryPort,
-  type ExpiryDigestEntry,
-} from "./expiry-digest-delivery.stub";
+import { NotificationsService } from "../notifications/notifications.service";
+
+export interface ExpiryDigestEntry {
+  medicineName: string;
+  batchNumber: string;
+  expiryDate: string;
+  quantityOnHand: number;
+}
 
 /** FR-PHARM-005 — "batches expiring within 30 days". */
 export const EXPIRY_DIGEST_WINDOW_DAYS = 30;
@@ -44,7 +47,7 @@ export class ExpiryScanService {
   constructor(
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly stock: StockService,
-    @Inject(EXPIRY_DIGEST_DELIVERY_PORT) private readonly delivery: ExpiryDigestDeliveryPort,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Scans every hospital (or just `onlyHospitalIds`). One hospital failing
@@ -70,6 +73,8 @@ export class ExpiryScanService {
         );
       }
     }
+    // Digests and any low-stock alerts are committed; hand them to delivery.
+    this.notifications.publish();
     if (failures.length > 0) {
       throw new Error(
         `Expiry scan failed for ${failures.length} hospital(s): ${failures.join(", ")}`,
@@ -170,10 +175,11 @@ export class ExpiryScanService {
     });
   }
 
-  /** One digest per recipient per hospital-local day. The date is the
-   * idempotency key (`relatedEntityId`), so a retried or repeated run the
-   * same day skips anyone already sent that day's digest. Runs inside the
-   * hospital's TenantContext. */
+  /** One digest per recipient per hospital-local day (brief §7.6 hint;
+   * Email + In-app per the trigger table). The hospital and date form the
+   * dedupe key, so a retried or repeated run the same day creates nothing
+   * new, even if two runs race. Runs inside the hospital's TenantContext;
+   * `runScan` publishes once every hospital is done. */
   private async sendDigest(
     hospital: { id: string; name: string },
     scanDate: string,
@@ -183,18 +189,6 @@ export class ExpiryScanService {
     const recipientIds = await this.stock.alertRecipientIds(this.prisma);
     if (recipientIds.length === 0) return 0;
 
-    const alreadySent = await this.prisma.notification.findMany({
-      where: {
-        type: NotificationType.MEDICINE_EXPIRY_DIGEST,
-        relatedEntityId: scanDate,
-        recipientUserId: { in: recipientIds },
-      },
-      select: { recipientUserId: true },
-    });
-    const sent = new Set(alreadySent.map((n) => n.recipientUserId));
-    const pending = recipientIds.filter((id) => !sent.has(id));
-    if (pending.length === 0) return 0;
-
     const lines = entries
       .slice(0, DIGEST_MAX_LINES)
       .map(
@@ -202,7 +196,7 @@ export class ExpiryScanService {
           `${e.medicineName} (batch ${e.batchNumber}): ${e.quantityOnHand} left, expires ${e.expiryDate}`,
       );
     const body = [
-      `${entries.length} batch(es) expire within ${EXPIRY_DIGEST_WINDOW_DAYS} days.`,
+      `${hospital.name}: ${entries.length} batch(es) expire within ${EXPIRY_DIGEST_WINDOW_DAYS} days.`,
       ...(quarantinedCount > 0
         ? [`${quarantinedCount} expired batch(es) were quarantined today.`]
         : []),
@@ -212,30 +206,15 @@ export class ExpiryScanService {
         : []),
     ].join("\n");
 
-    await this.prisma.notification.createMany({
-      data: pending.map((recipientUserId) => ({
-        hospitalId: hospital.id,
-        recipientUserId,
-        type: NotificationType.MEDICINE_EXPIRY_DIGEST,
-        title: `Medicine expiry digest: ${scanDate}`,
-        body,
-        channels: [NotificationChannel.EMAIL, NotificationChannel.IN_APP],
-        relatedEntityType: "MedicineExpiryDigest",
-        relatedEntityId: scanDate,
-      })),
+    return this.notifications.record(this.prisma, {
+      type: NotificationType.MEDICINE_EXPIRY_DIGEST,
+      hospitalId: hospital.id,
+      recipientUserIds: recipientIds,
+      title: `Medicine expiry digest: ${scanDate}`,
+      body,
+      relatedEntityType: "MedicineExpiryDigest",
+      relatedEntityId: scanDate,
+      dedupeKey: `${NotificationType.MEDICINE_EXPIRY_DIGEST}:${hospital.id}:${scanDate}`,
     });
-
-    const recipients = await this.prisma.user.findMany({
-      where: { id: { in: pending } },
-      select: { email: true },
-    });
-    await this.delivery.sendExpiryDigest({
-      hospitalName: hospital.name,
-      recipientEmails: recipients.map((r) => r.email),
-      digestDate: scanDate,
-      entries,
-      quarantinedCount,
-    });
-    return pending.length;
   }
 }

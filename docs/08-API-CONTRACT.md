@@ -197,11 +197,14 @@ Implemented in Phase 10 (`11-DECISIONS.md` D-027 to D-031). Money amounts are de
 
 ### 4.10 Notifications
 
-| Method + Path                                         | Auth                                 | FR           |
-| ----------------------------------------------------- | ------------------------------------ | ------------ |
-| `GET /notifications/me`                               | Any authenticated                    | FR-NOTIF-003 |
-| `PATCH /notifications/:id/read`                       | Owner only                           | FR-NOTIF-003 |
-| WebSocket `notifications` namespace, room `user:{id}` | Authenticated socket handshake (JWT) | FR-NOTIF-003 |
+| Method + Path                                         | Auth                                 | FR           | Notes (Phase 11) |
+| ----------------------------------------------------- | ------------------------------------ | ------------ | ---------------- |
+| `GET /notifications/me?page=&limit=&unreadOnly=`      | Any authenticated (every role, incl. Super Admin) | FR-NOTIF-003 | The caller's own **in-app** notifications (rows whose channels include `IN_APP`), newest first, paginated. `meta.unreadCount` is added to the usual pagination meta. Items are `NotificationView` (`packages/types`): `id, type, title, body, relatedEntityType, relatedEntityId, readAt, createdAt`. `unreadOnly` must be `true`/`false` (400 otherwise). |
+| `PATCH /notifications/:id/read`                       | Owner only                           | FR-NOTIF-003 | Sets `readAt` once (idempotent: re-reading keeps the first time). Anyone else's id, an email/SMS-only row, or an unknown id → 404. Returns the `NotificationView`. |
+| WebSocket `notifications` namespace, room `user:{id}` | Authenticated socket handshake (JWT) | FR-NOTIF-003 | Socket.IO namespace `/notifications` (same host/port as the API). Connect with `auth: { token: <accessToken> }`; a missing, invalid, or expired token, or a disabled account, fails the handshake with `connect_error` `"UNAUTHENTICATED"`. The server emits `notification:new` with a `NotificationView`. It's disconnected when the token expires, and the client reconnects with a refreshed token. No client-to-server events. Constants: `NOTIFICATIONS_NAMESPACE`, `NotificationSocketEvent` in `packages/types`. |
+| `GET /admin/queues` (Bull Board UI)                   | HTTP Basic (dev only)                | NFR-AVAIL-002 | Mounted only when `BULL_BOARD_ENABLED=true`, which env validation refuses in production (SEC-NOTIF-005). Otherwise 404. |
+
+Which events notify whom, on which channels, is the trigger table in `docs/11-DECISIONS.md` D-032 (brief §7.8). Delivery is asynchronous, after the triggering request commits, so none of these events changes any endpoint's response.
 
 ### 4.11 Analytics & Search
 

@@ -261,6 +261,7 @@ describe("Medical Records / EMR (e2e)", () => {
       });
       await prisma.medicalRecord.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await purgeBilling(prisma, createdHospitalIds);
+      await prisma.notification.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.appointment.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.allergy.deleteMany({ where: { patientId: { in: [patientProfileId, otherPatientProfileId] } } });
       await prisma.vaccinationRecord.deleteMany({

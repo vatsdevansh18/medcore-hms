@@ -7,7 +7,7 @@ import { AuthService } from "./auth.service";
 import { TokenService } from "./services/token.service";
 import { OtpService } from "./services/otp.service";
 import { PasswordResetService } from "./services/password-reset.service";
-import { OtpDeliveryStub, OTP_DELIVERY_PORT } from "./services/otp-delivery.stub";
+import { MessagingOtpDelivery, OTP_DELIVERY_PORT } from "./services/otp-delivery";
 import { JwtStrategy } from "./strategies/jwt.strategy";
 
 @Module({
@@ -29,7 +29,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
     OtpService,
     PasswordResetService,
     JwtStrategy,
-    { provide: OTP_DELIVERY_PORT, useClass: OtpDeliveryStub },
+    { provide: OTP_DELIVERY_PORT, useClass: MessagingOtpDelivery },
   ],
   // JwtAuthGuard/RolesGuard are registered globally in AppModule
   // (SEC-AUTHZ-002) — they have no AuthModule-specific dependencies (just

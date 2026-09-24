@@ -1,13 +1,14 @@
 import { Inject, Logger } from "@nestjs/common";
 import { Processor, WorkerHost } from "@nestjs/bullmq";
 import type { Job } from "bullmq";
-import { AppointmentStatus } from "@medcore/types";
+import { AppointmentStatus, NotificationType } from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
 import { SAFE_USER_SELECT } from "../common/prisma/safe-user-select";
 import { APPOINTMENT_REMINDER_QUEUE, type AppointmentReminderJobData } from "./queue.constants";
-import { REMINDER_DELIVERY_PORT, type ReminderDeliveryPort } from "./reminder-delivery.stub";
+import { NotificationsService } from "../notifications/notifications.service";
+import { doctorName, formatHospitalTime } from "../notifications/notification-format";
 
 /** A background job has no per-request caller, so it reads across hospitals
  * via `TenantContext.bypass()` — the same documented escape hatch seed
@@ -18,7 +19,7 @@ export class AppointmentReminderProcessor extends WorkerHost {
 
   constructor(
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
-    @Inject(REMINDER_DELIVERY_PORT) private readonly delivery: ReminderDeliveryPort,
+    private readonly notifications: NotificationsService,
   ) {
     super();
   }
@@ -29,7 +30,10 @@ export class AppointmentReminderProcessor extends WorkerHost {
     const appointment = await TenantContext.bypass(() =>
       this.prisma.appointment.findUnique({
         where: { id: appointmentId },
-        include: { patient: { include: { user: { select: SAFE_USER_SELECT } } } },
+        include: {
+          patient: { include: { user: { select: SAFE_USER_SELECT } } },
+          doctor: { include: { user: { select: SAFE_USER_SELECT } } },
+        },
       }),
     );
 
@@ -49,17 +53,29 @@ export class AppointmentReminderProcessor extends WorkerHost {
       return;
     }
 
-    const patientEmail = appointment.patient.user?.email;
-    if (!patientEmail) {
-      this.logger.warn(`Reminder job for ${appointmentId} (${window}) — patient has no linked user/email, skipping.`);
+    const patientUserId = appointment.patient.user?.id;
+    if (!patientUserId) {
+      this.logger.warn(`Reminder job for ${appointmentId} (${window}): patient has no portal account, skipping.`);
       return;
     }
 
-    await this.delivery.sendAppointmentReminder({
-      appointmentId,
-      patientEmail,
-      scheduledStart: appointment.scheduledStart,
-      window,
-    });
+    // FR-APPT-007 / brief §7.8 "Appointment reminder": Email + SMS. The
+    // appointment and window form the dedupe key, so a retried job never
+    // raises a second reminder for the same window.
+    const hospitalId = appointment.hospitalId;
+    const hospital = await this.prisma.hospital.findUnique({ where: { id: hospitalId }, select: { timezone: true } });
+    await TenantContext.run({ hospitalId, userId: null, bypassTenancy: false }, () =>
+      this.notifications.record(this.prisma, {
+        type: NotificationType.APPOINTMENT_REMINDER,
+        hospitalId,
+        recipientUserIds: [patientUserId],
+        title: window === "24h" ? "Appointment tomorrow" : "Appointment in 1 hour",
+        body: `Reminder: your appointment with ${doctorName(appointment.doctor.user)} is on ${formatHospitalTime(appointment.scheduledStart, hospital?.timezone ?? "Asia/Kolkata")}.`,
+        relatedEntityType: "Appointment",
+        relatedEntityId: appointmentId,
+        dedupeKey: `${NotificationType.APPOINTMENT_REMINDER}:${appointmentId}:${window}`,
+      }),
+    );
+    this.notifications.publish();
   }
 }

@@ -8,10 +8,10 @@ import {
 } from "./queue.constants";
 import { AppointmentReminderQueueService } from "./appointment-reminder-queue.service";
 import { AppointmentReminderProcessor } from "./appointment-reminder.processor";
-import { ReminderDeliveryStub, REMINDER_DELIVERY_PORT } from "./reminder-delivery.stub";
 import { PrescriptionPdfQueueService } from "./prescription-pdf-queue.service";
 import { PrescriptionPdfProcessor } from "./prescription-pdf.processor";
 import { MedicinesModule } from "../medicines/medicines.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { MedicineExpiryScanProcessor } from "./medicine-expiry-scan.processor";
 import { MedicineExpiryScanScheduler } from "./medicine-expiry-scan.scheduler";
 
@@ -74,11 +74,11 @@ import { MedicineExpiryScanScheduler } from "./medicine-expiry-scan.scheduler";
       },
     }),
     MedicinesModule,
+    NotificationsModule,
   ],
   providers: [
     AppointmentReminderQueueService,
     AppointmentReminderProcessor,
-    { provide: REMINDER_DELIVERY_PORT, useClass: ReminderDeliveryStub },
     PrescriptionPdfQueueService,
     PrescriptionPdfProcessor,
     MedicineExpiryScanProcessor,

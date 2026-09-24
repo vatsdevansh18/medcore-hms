@@ -8,6 +8,7 @@ import { AppException } from "../common/errors/app-exception";
 import { PaginatedResult } from "../common/pagination/paginated-result";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
 import { ChargesService, type BillingDb } from "./charges.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { InvoiceLedgerService } from "./invoice-ledger.service";
 import type { CreateInvoiceDto } from "./dto/create-invoice.dto";
 import type { AddInvoiceItemDto } from "./dto/add-invoice-item.dto";
@@ -42,6 +43,7 @@ export class InvoicesService {
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly charges: ChargesService,
     private readonly ledger: InvoiceLedgerService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private requireHospitalId(caller: AuthenticatedUser): string {
@@ -133,7 +135,7 @@ export class InvoicesService {
    * credited) has nothing to collect, so it goes straight to PAID. */
   async finalize(invoiceId: string, caller: AuthenticatedUser) {
     const hospitalId = this.requireHospitalId(caller);
-    return this.scoped(caller, hospitalId, () =>
+    const view = await this.scoped(caller, hospitalId, () =>
       this.prisma.$transaction(async (tx) => {
         if (!(await this.charges.lockInvoice(tx, hospitalId, invoiceId))) {
           throw new NotFoundException("Invoice not found.");
@@ -156,14 +158,24 @@ export class InvoicesService {
         // sum. The DB trigger guarantees this at commit, but finalizing is
         // the moment the amount becomes binding.
         await this.charges.recomputeTotals(tx, invoiceId);
-        await tx.invoice.update({
+        const finalized = await tx.invoice.update({
           where: { id: invoiceId },
           data: { status: InvoiceStatus.FINALIZED, finalizedBy: caller.sub, finalizedAt: new Date() },
+          include: { patient: { select: { userId: true } } },
         });
         await this.ledger.applyPaymentStatus(tx, invoiceId);
+        await this.ledger.notifyInvoiceGenerated(tx, {
+          hospitalId,
+          invoiceId,
+          patientUserId: finalized.patient.userId,
+          total: finalized.total,
+          currency: finalized.currency,
+        });
         return this.view(tx, invoiceId);
       }),
     );
+    this.notifications.publish();
+    return view;
   }
 
   async findOne(invoiceId: string, caller: AuthenticatedUser) {

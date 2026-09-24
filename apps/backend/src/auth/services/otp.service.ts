@@ -4,7 +4,7 @@ import type Redis from "ioredis";
 import { ApiErrorCode } from "@medcore/types";
 import { REDIS_CLIENT } from "../../redis/redis.constants";
 import { AppException } from "../../common/errors/app-exception";
-import { OTP_DELIVERY_PORT, type OtpDeliveryPort } from "./otp-delivery.stub";
+import { OTP_DELIVERY_PORT, type OtpDeliveryPort } from "./otp-delivery";
 
 export type OtpPurpose = "email" | "phone";
 

@@ -76,6 +76,7 @@ describe("Appointment overlap exclusion constraints (e2e)", () => {
 
   afterAll(async () => {
     await TenantContext.bypass(async () => {
+      await prisma.notification.deleteMany({ where: { hospitalId } });
       await prisma.appointment.deleteMany({ where: { hospitalId } });
       await prisma.doctorProfile.deleteMany({ where: { hospitalId } });
       await prisma.patientProfile.deleteMany({ where: { hospitalId } });

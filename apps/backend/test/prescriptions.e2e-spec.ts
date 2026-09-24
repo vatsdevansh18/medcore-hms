@@ -258,6 +258,7 @@ describe("Prescriptions (e2e)", () => {
         where: { hospitalId: { in: createdHospitalIds } },
         data: { supersedesId: null },
       });
+      await prisma.notification.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.prescription.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await prisma.medicalRecord.deleteMany({ where: { hospitalId: { in: createdHospitalIds } } });
       await purgeBilling(prisma, createdHospitalIds);

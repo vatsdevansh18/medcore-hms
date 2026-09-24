@@ -316,6 +316,19 @@ erDiagram
         uuid relatedEntityId
         timestamptz readAt
         timestamptz createdAt
+        timestamptz dispatchedAt "outbox marker (Phase 11)"
+        string dedupeKey UK "per-recipient idempotency (Phase 11)"
+    }
+    NOTIFICATION_DELIVERY_LOG {
+        uuid id PK
+        uuid notificationId FK "ON DELETE CASCADE"
+        enum channel "EMAIL|SMS|IN_APP"
+        string provider
+        enum status "PENDING|SENT|FAILED|SKIPPED"
+        int attempt
+        string providerMessageId
+        string errorMessage
+        timestamptz attemptedAt
     }
     AUDIT_LOG {
         uuid id PK
@@ -340,6 +353,11 @@ erDiagram
 - A BEFORE trigger makes a non-DRAFT invoice's line items immutable. The only exception is appending a credit (negative) line while it's FINALIZED/PARTIALLY_PAID.
 - New columns: `Invoice.finalizedAt`, `InvoiceItem.createdAt`, `Payment.recordedBy` (cash).
 - `Payment.providerEventId` (unique) holds the provider's checkout reference (Stripe Checkout Session / Razorpay order id); see D-029.
+
+**As implemented in Phase 11** (migration `20260925090000_notification_dispatch`, `11-DECISIONS.md` D-032):
+- `Notification` is the transactional outbox. `dispatchedAt` is null until the dispatcher has enqueued its per-channel jobs, and `dedupeKey` (unique) makes a repeated trigger a no-op. Rows written before the migration are marked dispatched so they're never sent retroactively.
+- Indexes: `(recipientUserId, createdAt)` serves `GET /notifications/me`; `(dispatchedAt, createdAt)` serves the outbox drain and sweep.
+- `NotificationDeliveryLog` records one row per delivery attempt (`attempt`, `providerMessageId`), with the new `SKIPPED` status. Its FK to `Notification` is now `ON DELETE CASCADE`, since a log has no meaning without its notification.
 
 ## 4. Key Design Decisions
 

@@ -14,6 +14,7 @@ import type { UpdateMedicineDto } from "./dto/update-medicine.dto";
 import type { ReceiveBatchDto } from "./dto/receive-batch.dto";
 import type { FindExpiringQueryDto } from "./dto/find-expiring-query.dto";
 import { StockService } from "./stock.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { addDays, hospitalToday, parseDateOnly } from "./pharmacy-date.util";
 
 export interface LowStockRow {
@@ -37,6 +38,7 @@ export class MedicinesService {
   constructor(
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly stock: StockService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private requireHospitalId(caller: AuthenticatedUser): string {
@@ -184,6 +186,7 @@ export class MedicinesService {
         }
       }),
     );
+    this.notifications.publish();
     return this.findOne(id, caller);
   }
 
@@ -236,7 +239,7 @@ export class MedicinesService {
     }
 
     try {
-      return await this.scoped(caller, hospitalId, () =>
+      const received = await this.scoped(caller, hospitalId, () =>
         this.prisma.$transaction(async (tx) => {
           const locked = await this.stock.lockMedicines(tx, hospitalId, [medicineId]);
           const medicine = locked.length
@@ -262,6 +265,8 @@ export class MedicinesService {
           return batch;
         }),
       );
+      this.notifications.publish();
+      return received;
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         throw new AppException(

@@ -13,6 +13,7 @@ import { TenantContext } from "../../common/tenancy/tenant-context";
 import { AppException } from "../../common/errors/app-exception";
 import type { AuthenticatedUser } from "../../auth/interfaces/authenticated-user.interface";
 import { ChargesService, type BillingDb } from "../charges.service";
+import { NotificationsService } from "../../notifications/notifications.service";
 import { InvoiceLedgerService } from "../invoice-ledger.service";
 import { InvoicesService } from "../invoices.service";
 import type { CashPaymentDto } from "../dto/cash-payment.dto";
@@ -47,6 +48,7 @@ export class PaymentsService {
     private readonly invoices: InvoicesService,
     private readonly checkout: CheckoutClient,
     private readonly verifier: PaymentWebhookVerifier,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private assertPayable(status: string): void {
@@ -68,7 +70,7 @@ export class PaymentsService {
     const hospitalId = caller.hospitalId;
     const amount = new Prisma.Decimal(dto.amount);
 
-    return TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
+    const result = await TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
       this.prisma.$transaction(async (tx) => {
         // The lock serialises concurrent cash payments, so two cashiers
         // can't both take the same remaining balance.
@@ -124,6 +126,8 @@ export class PaymentsService {
         };
       }),
     );
+    this.notifications.publish();
+    return result;
   }
 
   /**
@@ -268,6 +272,7 @@ export class PaymentsService {
     const applied = await TenantContext.run({ hospitalId, userId: null, bypassTenancy: false }, () =>
       this.prisma.$transaction(async (tx) => this.applyEvent(tx, hospitalId, payment.id, payment.invoiceId, event)),
     );
+    if (applied) this.notifications.publish();
     return { received: true, applied };
   }
 
