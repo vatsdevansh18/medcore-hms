@@ -29,11 +29,12 @@ function appAlert(page: Page) {
  * aborts the tab's navigation, so the request is captured instead.
  */
 async function openDownload(page: Page, name: string | RegExp): Promise<string> {
-  const popupPromise = page.waitForEvent("popup");
+  // Listen on the whole context before clicking: the popup may request the
+  // pre-signed URL before a listener on the popup page could be attached
+  // (a race seen in Phase 13B with fast attachment links).
+  const request = page.context().waitForEvent("request", (r) => /X-Amz-Signature=/.test(r.url()));
   await page.getByRole("button", { name }).first().click();
-  const popup = await popupPromise;
-  const request = await popup.waitForRequest(/X-Amz-Signature=/);
-  return request.url();
+  return (await request).url();
 }
 
 test.describe("authentication", () => {
@@ -166,8 +167,11 @@ test.describe("appointments (FR-PORTAL-002)", () => {
     await signInAsPatient(page);
     await page.getByRole("link", { name: "Book appointment" }).first().click();
 
-    // Step 1: doctor.
-    await page.getByRole("button", { name: /Dr\./ }).first().click();
+    // Step 1: the fixture's seeded doctor, by name. Picking "the first doctor"
+    // broke once the run's own e2e doctor (no hours yet) joined the list.
+    const token = await apiLogin(fx.patientA.email, fx.password);
+    const seeded = await api<{ user: { lastName: string } }>(`/doctors/${fx.doctorId}`, { token });
+    await page.getByRole("button", { name: new RegExp(seeded.user.lastName) }).first().click();
     // Step 2: a time next week (outside the 24h reschedule cutoff).
     await page.getByRole("button", { name: "Next week" }).click();
     const slots = page.locator("fieldset button");

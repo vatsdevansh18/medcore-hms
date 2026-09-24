@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,10 +25,15 @@ export function Panel({
   bodyClassName?: string;
   children: ReactNode;
 }) {
+  // A named region, so assistive tech can jump between panels (and tests
+  // can scope to one) by its title.
+  const titleId = useId();
   return (
-    <Card className={cn("flex min-w-0 flex-col", className)}>
+    <Card role="region" aria-labelledby={titleId} className={cn("flex min-w-0 flex-col", className)}>
       <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle id={titleId} className="text-base">
+          {title}
+        </CardTitle>
         <div className="flex items-center gap-3">
           {actions}
           {href && (

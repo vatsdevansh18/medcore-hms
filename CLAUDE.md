@@ -67,6 +67,9 @@ A multi-tenant Hospital Management Platform, built under a strict phase-gated me
 - **Playwright `getByLabel("Doctor")` also matches the global search box** (its label is "Search patients, doctors, and medicines"). In the staff workspace, pass `{ exact: true }` for any label that's a substring of that, and prefer `[data-status="…"]` over `getByText` for status badges ("Paid" is also a summary label on the bill).
 - **A staff screen reached from a list (not the sidebar) must be added to `WORKFLOW_ACCESS` in `components/modules/staff-nav.ts`** and wrapped in `<RoleGate route="/dashboard/<x>/:id">`, with the roles of the API calls it makes. Button visibility comes from pure helpers that copy API rules (`lib/appointment-actions.ts` copies `ALLOWED_TRANSITIONS` in `appointments.service.ts`); change both together. These are UX only; the API is the control. D-041.
 
+- **A browser upload to a pre-signed S3 URL needs a bucket CORS rule for the web origin, and Node-side tests can't catch its absence** (Node doesn't enforce CORS). `S3Service.onModuleInit` applies the rule to the LocalStack bucket from `CORS_ORIGIN`; a production bucket must get the same rule from infrastructure. Test uploads in the browser (Playwright), not only through supertest. Every browser upload was broken from Phase 6 until the Phase 13B follow-up. D-042.
+- **Playwright fixtures must not change seeded data other tests depend on.** A test that edits a doctor's hours or signature uses the run's own e2e doctor (`fx.ownDoctorId`). A test that needs "a doctor" names the seeded one (`fx.doctorId`), never `.first()` of a list that other fixtures can grow. To capture a popup's pre-signed download, listen on `page.context()` before clicking, not on the popup: fast links fire before a popup listener attaches.
+
 ## Where things live
 
 - Architecture decisions with rejected alternatives: `docs/11-DECISIONS.md` — append here, never overwrite.

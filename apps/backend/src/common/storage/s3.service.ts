@@ -5,6 +5,7 @@ import {
   CreateBucketCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  PutBucketCorsCommand,
   PutObjectCommand,
   S3Client,
   type PutObjectCommandInput,
@@ -75,6 +76,35 @@ export class S3Service implements OnModuleInit {
       await this.client.send(new CreateBucketCommand({ Bucket: this.bucket }));
       this.logger.log(`Created dev bucket "${this.bucket}" on local S3 endpoint.`);
     }
+    // Browsers upload straight to a pre-signed PUT URL, a cross-origin
+    // request that S3 refuses unless the bucket has a CORS rule for the web
+    // app's origin. Without it every browser upload (EMR attachments,
+    // signatures, lab report files) failed its preflight; server-side tests
+    // never noticed because Node doesn't enforce CORS (found in Phase 13B,
+    // docs/11-DECISIONS.md D-042). Applied on every start, so the rule
+    // follows CORS_ORIGIN. Production buckets get the same rule from infra.
+    await this.client.send(new PutBucketCorsCommand({ Bucket: this.bucket, CORSConfiguration: this.corsConfiguration() }));
+  }
+
+  /** The bucket CORS rule browsers need for pre-signed uploads and
+   * downloads: the web app's origin(s), PUT/GET only, and nothing wider. */
+  corsConfiguration() {
+    const origins = this.config
+      .get<string>("CORS_ORIGIN", "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean);
+    return {
+      CORSRules: [
+        {
+          AllowedOrigins: origins,
+          AllowedMethods: ["PUT", "GET"],
+          AllowedHeaders: ["content-type"],
+          ExposeHeaders: ["ETag"],
+          MaxAgeSeconds: 3000,
+        },
+      ],
+    };
   }
 
   /** `scope` is a `/`-joined path prefix (e.g. `medical-records/{id}`,

@@ -77,7 +77,7 @@
 
 - **SEC-FILE-001** — Uploads validated by both MIME type and file extension against an allow-list (`image/jpeg`, `image/png`, `application/pdf`, and a small set of document types) — executable and script-like extensions are rejected outright regardless of claimed MIME type.
 - **SEC-FILE-002** — Size capped at 20 MB per EMR attachment, per the brief; smaller caps apply to profile images.
-- **SEC-FILE-003** — Files are stored in a private S3 bucket; access is via short-lived pre-signed URLs generated per request, never a public bucket policy.
+- **SEC-FILE-003** — Files are stored in a private S3 bucket; access is via short-lived pre-signed URLs generated per request, never a public bucket policy. The bucket's CORS rule allows only the web app's origin(s), PUT and GET only, so a pre-signed URL can be used from the MedCore web app and not from another site (D-042; the dev bucket gets it at API start, production from infrastructure).
 - **SEC-FILE-004** — A ClamAV scan step is documented as the production-hardening target for Phase 15/16; if infrastructure constraints prevent standing up ClamAV within the project timeline, this is logged as a documented, accepted risk in that phase's review — not silently dropped.
 - **SEC-FILE-005** (Phase 12) — S3 storage keys never appear in an API response (doctor signatures, prescription PDFs, EMR attachments, lab report files, receipts); clients reach files only through per-request pre-signed URLs. URLs for clients are signed for the address the client uses (`S3_PUBLIC_ENDPOINT` when it differs from the API's own `S3_ENDPOINT`, as in Docker dev); URLs fetched by the server itself are signed for the internal address and never returned (`11-DECISIONS.md` D-036).
 

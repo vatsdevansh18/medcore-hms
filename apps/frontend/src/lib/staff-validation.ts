@@ -132,6 +132,25 @@ export const familyHistorySchema = z.object({
   condition: z.enum(Object.values(FamilyHistoryCondition) as [FamilyHistoryCondition, ...FamilyHistoryCondition[]]),
   notes: text(500),
 });
+export type FamilyHistoryValues = z.infer<typeof familyHistorySchema>;
+
+/** CreateVaccinationDto. The next dose, if given, falls after this one. */
+export const vaccinationSchema = z
+  .object({
+    vaccineName: required("the vaccine", 200),
+    doseNumber: requiredNumber("the dose number", 1, 20, { integer: true }),
+    dateAdministered: z
+      .string()
+      .regex(DATE_ONLY, "Enter the date it was given.")
+      .refine((v) => new Date(v) <= new Date(), "That date is in the future."),
+    batchNumber: text(100),
+    nextDueDate: z.string().refine((v) => v === "" || DATE_ONLY.test(v), "Enter a date."),
+  })
+  .refine((v) => !v.nextDueDate || !v.dateAdministered || v.nextDueDate > v.dateAdministered, {
+    message: "The next dose must be after this one.",
+    path: ["nextDueDate"],
+  });
+export type VaccinationValues = z.infer<typeof vaccinationSchema>;
 
 /** PrescriptionItemDto, one line of the prescription form. */
 export const prescriptionLineSchema = z.object({
@@ -252,3 +271,53 @@ export const settingsSchema = z.object({
   patientRescheduleCutoffHours: requiredNumber("the cutoff", 0, 720, { integer: true }),
 });
 export type SettingsValues = z.infer<typeof settingsSchema>;
+
+// ── Platform (Super Admin) ──────────────────────────────────────────────
+
+/** CreateHospitalDto. The address is optional as a whole: street given
+ * means every address field is required. */
+export const hospitalSchema = z
+  .object({
+    name: text(200).min(2, "Use at least 2 characters."),
+    slug: z
+      .string()
+      .trim()
+      .min(2, "Use at least 2 characters.")
+      .max(60, "Use 60 characters or fewer.")
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Lowercase letters and digits, joined by hyphens."),
+    contactEmail: email,
+    contactPhone: phone,
+    timezone: z
+      .string()
+      .trim()
+      .refine((v) => {
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: v });
+          return v.length > 0;
+        } catch {
+          return false;
+        }
+      }, "Enter a valid IANA time zone, e.g. Asia/Kolkata."),
+    line1: text(200),
+    city: text(100),
+    state: text(100),
+    postalCode: text(20),
+    country: text(100),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.line1) return;
+    for (const key of ["city", "state", "postalCode", "country"] as const) {
+      if (!v[key]) ctx.addIssue({ code: "custom", message: "Required with a street address.", path: [key] });
+    }
+  });
+export type HospitalValues = z.infer<typeof hospitalSchema>;
+
+/** CreateHospitalAdminDto. */
+export const hospitalAdminSchema = z.object({
+  firstName: required("the first name", 100),
+  lastName: required("the last name", 100),
+  email,
+  phone,
+  employeeCode: required("the employee code", 50),
+});
+export type HospitalAdminValues = z.infer<typeof hospitalAdminSchema>;

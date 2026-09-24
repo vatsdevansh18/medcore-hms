@@ -5,7 +5,7 @@ import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
 import { AppException } from "../common/errors/app-exception";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
-import { addDaysToKey, weekdayOf, zonedWallTimeToUtc } from "../common/time/zoned-time";
+import { addDaysToKey, localDateKey, weekdayOf, zonedWallTimeToUtc } from "../common/time/zoned-time";
 import type { SetAvailabilityDto } from "./dto/availability-slot.dto";
 import type { CreateAvailabilityExceptionDto } from "./dto/create-availability-exception.dto";
 
@@ -69,6 +69,21 @@ export class AvailabilityService {
         );
       }
     }
+    // Two windows on one weekday may touch but not overlap: overlapping
+    // windows would offer the same time twice (added with the availability
+    // editor, D-042). HH:mm strings compare correctly as text.
+    const byDay = [...dto.slots].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+    for (let i = 1; i < byDay.length; i++) {
+      const prev = byDay[i - 1];
+      const cur = byDay[i];
+      if (prev.dayOfWeek === cur.dayOfWeek && cur.startTime < prev.endTime) {
+        throw new AppException(
+          ApiErrorCode.VALIDATION_ERROR,
+          `Day ${cur.dayOfWeek}: ${prev.startTime}-${prev.endTime} and ${cur.startTime}-${cur.endTime} overlap.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
 
     return TenantContext.run(
       { hospitalId: caller.hospitalId!, userId: caller.sub, bypassTenancy: false },
@@ -92,6 +107,57 @@ export class AvailabilityService {
         });
       },
     );
+  }
+
+  /** The doctor's own schedule for the availability editor (Phase 13B
+   * follow-up, D-042): the weekly hours, and exceptions from today (the
+   * hospital's calendar) onward. Self only, like the writes. */
+  async getSchedule(doctorId: string, caller: AuthenticatedUser) {
+    const doctor = await this.loadDoctorForCaller(doctorId, caller);
+    this.assertSelf(doctor, caller);
+    return TenantContext.run(
+      { hospitalId: caller.hospitalId!, userId: caller.sub, bypassTenancy: false },
+      async () => {
+        const hospital = await this.prisma.hospital.findUniqueOrThrow({
+          where: { id: caller.hospitalId! },
+          select: { timezone: true },
+        });
+        const today = localDateKey(new Date(), hospital.timezone);
+        const [weekly, exceptions] = await Promise.all([
+          this.prisma.doctorAvailability.findMany({
+            where: { doctorId },
+            orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+            select: { id: true, dayOfWeek: true, startTime: true, endTime: true, slotDurationMinutes: true, isActive: true },
+          }),
+          this.prisma.doctorAvailabilityException.findMany({
+            where: { doctorId, date: { gte: new Date(`${today}T00:00:00.000Z`) } },
+            orderBy: { date: "asc" },
+            take: 100,
+            select: { id: true, date: true, isUnavailable: true, startTime: true, endTime: true, reason: true },
+          }),
+        ]);
+        return {
+          timezone: hospital.timezone,
+          weekly,
+          exceptions: exceptions.map((e) => ({ ...e, date: e.date.toISOString().slice(0, 10) })),
+        };
+      },
+    );
+  }
+
+  /** Removes one date's exception, restoring the weekly hours for that day. */
+  async deleteException(doctorId: string, date: string, caller: AuthenticatedUser) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00.000Z`).getTime())) {
+      throw new AppException(ApiErrorCode.VALIDATION_ERROR, "date must be YYYY-MM-DD.", HttpStatus.BAD_REQUEST);
+    }
+    const doctor = await this.loadDoctorForCaller(doctorId, caller);
+    this.assertSelf(doctor, caller);
+    const { count } = await TenantContext.run(
+      { hospitalId: caller.hospitalId!, userId: caller.sub, bypassTenancy: false },
+      () => this.prisma.doctorAvailabilityException.deleteMany({ where: { doctorId, date: new Date(`${date}T00:00:00.000Z`) } }),
+    );
+    if (count === 0) throw new NotFoundException("No exception on that date.");
+    return { date, removed: true };
   }
 
   async createException(

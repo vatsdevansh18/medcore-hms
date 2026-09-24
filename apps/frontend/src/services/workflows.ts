@@ -8,7 +8,20 @@ import type {
   AllergyView,
   ApproveLabResultRequest,
   AppointmentView,
+  AttachmentUploadView,
+  AvailabilityExceptionRequest,
   BookAppointmentRequest,
+  CreateHospitalAdminRequest,
+  CreateHospitalRequest,
+  DoctorScheduleView,
+  DoctorView,
+  FamilyHistoryRequest,
+  FamilyHistoryView,
+  HospitalView,
+  SetAvailabilityRequest,
+  UploadRequest,
+  VaccinationRequest,
+  VaccinationView,
   CashPaymentView,
   CreateDoctorRequest,
   CreateLabOrderRequest,
@@ -42,6 +55,7 @@ import type {
   UpdateHospitalRequest,
 } from "@medcore/types";
 import { ApiRequestError, apiPaginated, apiRequest } from "@/lib/api-client";
+import { uploadToSignedUrl } from "@/lib/upload";
 import { LIST_PAGE_SIZE } from "./staff";
 
 /**
@@ -77,6 +91,9 @@ const ROOT = {
   hospital: "hospital-settings",
   availability: "availability",
   analytics: "analytics",
+  schedule: "doctor-schedule",
+  doctor: "doctor-profile",
+  hospitals: "hospitals",
 } as const;
 
 function useInvalidate() {
@@ -502,5 +519,148 @@ export function useUpdateHospital(hospitalId: string) {
     mutationFn: (body: UpdateHospitalRequest) =>
       apiRequest<HospitalSettingsView>(`/hospitals/${hospitalId}`, { method: "PATCH", body }),
     onSettled: () => invalidate(ROOT.hospital),
+  });
+}
+
+// ── Phase 13B follow-up (D-042) ─────────────────────────────────────────
+
+
+export function useVaccinations(patientId: string) {
+  return useQuery({
+    queryKey: [ROOT.clinical, "vaccinations", patientId],
+    queryFn: () => apiRequest<VaccinationView[]>(`/patients/${patientId}/vaccinations`),
+  });
+}
+
+export function useAddVaccination(patientId: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: VaccinationRequest) => apiRequest(`/patients/${patientId}/vaccinations`, { method: "POST", body }),
+    onSettled: () => invalidate(ROOT.clinical),
+  });
+}
+
+export function useFamilyHistory(patientId: string) {
+  return useQuery({
+    queryKey: [ROOT.clinical, "family-history", patientId],
+    queryFn: () => apiRequest<FamilyHistoryView[]>(`/patients/${patientId}/family-history`),
+  });
+}
+
+export function useAddFamilyHistory(patientId: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: FamilyHistoryRequest) => apiRequest(`/patients/${patientId}/family-history`, { method: "POST", body }),
+    onSettled: () => invalidate(ROOT.clinical),
+  });
+}
+
+/** Declares the attachment (the API validates type and size and returns a
+ * pre-signed URL), then uploads the bytes straight to storage. */
+export function useUploadAttachment(recordId: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const declared: UploadRequest = { fileName: file.name, mimeType: file.type, sizeBytes: file.size };
+      const { attachment, uploadUrl } = await apiRequest<AttachmentUploadView>(`/medical-records/${recordId}/attachments`, {
+        method: "POST",
+        body: declared,
+      });
+      await uploadToSignedUrl(uploadUrl, file);
+      return attachment;
+    },
+    onSettled: () => invalidate(ROOT.record),
+  });
+}
+
+export const fetchAttachmentUrl = (recordId: string, attachmentId: string) =>
+  apiRequest<DownloadUrlView>(`/medical-records/${recordId}/attachments/${attachmentId}/download-url`);
+
+export function useDoctorSchedule(doctorId: string | null | undefined) {
+  return useQuery({
+    queryKey: [ROOT.schedule, doctorId],
+    queryFn: () => apiRequest<DoctorScheduleView>(`/doctors/${doctorId}/schedule`),
+    enabled: Boolean(doctorId),
+  });
+}
+
+const SCHEDULE_ROOTS = [ROOT.schedule, ROOT.availability];
+
+export function useSaveWeeklyHours(doctorId: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: SetAvailabilityRequest) => apiRequest(`/doctors/${doctorId}/availability`, { method: "PUT", body }),
+    onSettled: () => invalidate(...SCHEDULE_ROOTS),
+  });
+}
+
+export function useAddException(doctorId: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: AvailabilityExceptionRequest) =>
+      apiRequest(`/doctors/${doctorId}/availability-exceptions`, { method: "POST", body }),
+    onSettled: () => invalidate(...SCHEDULE_ROOTS),
+  });
+}
+
+export function useRemoveException(doctorId: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (date: string) => apiRequest(`/doctors/${doctorId}/availability-exceptions/${date}`, { method: "DELETE" }),
+    onSettled: () => invalidate(...SCHEDULE_ROOTS),
+  });
+}
+
+export function useDoctorProfile(doctorId: string | null | undefined) {
+  return useQuery({
+    queryKey: [ROOT.doctor, doctorId],
+    queryFn: () => apiRequest<DoctorView>(`/doctors/${doctorId}`),
+    enabled: Boolean(doctorId),
+  });
+}
+
+/** The prescription signature: declare it, then upload the image. New
+ * prescriptions carry it; issued PDFs never change. */
+export function useUploadSignature(doctorId: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const { uploadUrl } = await apiRequest<{ uploadUrl: string }>(`/doctors/${doctorId}/signature`, {
+        method: "POST",
+        body: { fileName: file.name, mimeType: file.type, sizeBytes: file.size } satisfies UploadRequest,
+      });
+      await uploadToSignedUrl(uploadUrl, file);
+    },
+    onSettled: () => invalidate(ROOT.doctor),
+  });
+}
+
+export function useHospitals(page: number) {
+  return useQuery({
+    queryKey: [ROOT.hospitals, page],
+    queryFn: () => apiPaginated<HospitalView>("/hospitals", { query: { page, limit: LIST_PAGE_SIZE } }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCreateHospital() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: CreateHospitalRequest) => apiRequest<HospitalView>("/hospitals", { method: "POST", body }),
+    onSettled: () => invalidate(ROOT.hospitals, ROOT.analytics),
+  });
+}
+
+export function useVerifyHospital() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => apiRequest<HospitalView>(`/hospitals/${id}/verify`, { method: "PATCH" }),
+    onSettled: () => invalidate(ROOT.hospitals, ROOT.analytics),
+  });
+}
+
+export function useCreateHospitalAdmin(hospitalId: string) {
+  return useMutation({
+    mutationFn: (body: CreateHospitalAdminRequest) => apiRequest(`/hospitals/${hospitalId}/admins`, { method: "POST", body }),
   });
 }

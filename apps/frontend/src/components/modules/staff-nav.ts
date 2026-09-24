@@ -2,9 +2,11 @@ import {
   Activity,
   BedDouble,
   Building2,
+  CalendarClock,
   CalendarDays,
   ClipboardList,
   FlaskConical,
+  Hospital,
   LayoutDashboard,
   Package,
   Pill,
@@ -39,6 +41,8 @@ const staff: StaffNavItem = { href: ROUTES.staffDirectory, label: "Staff", icon:
 const departments: StaffNavItem = { href: ROUTES.departments, label: "Departments", icon: Building2 };
 const settings: StaffNavItem = { href: ROUTES.settings, label: "Settings", icon: Settings };
 const audit: StaffNavItem = { href: ROUTES.auditLog, label: "Audit log", icon: ClipboardList };
+const practice: StaffNavItem = { href: ROUTES.practice, label: "My practice", icon: CalendarClock };
+const hospitals: StaffNavItem = { href: ROUTES.hospitals, label: "Hospitals", icon: Hospital };
 
 /**
  * Role-scoped navigation (docs/04-UI-UX.md §2.4, §6): a role sees only what
@@ -46,7 +50,7 @@ const audit: StaffNavItem = { href: ROUTES.auditLog, label: "Audit log", icon: C
  * mirrors the API's RBAC for convenience only; the API enforces it.
  */
 export const STAFF_NAV: Partial<Record<UserRole, StaffNavItem[]>> = {
-  [UserRole.SUPER_ADMIN]: [overview, audit],
+  [UserRole.SUPER_ADMIN]: [overview, hospitals, audit],
   [UserRole.HOSPITAL_ADMIN]: [
     overview,
     appointments(),
@@ -61,7 +65,14 @@ export const STAFF_NAV: Partial<Record<UserRole, StaffNavItem[]>> = {
     settings,
     audit,
   ],
-  [UserRole.DOCTOR]: [overview, appointments("My schedule"), patients, labOrders("My lab orders"), prescriptions("My prescriptions")],
+  [UserRole.DOCTOR]: [
+    overview,
+    appointments("My schedule"),
+    patients,
+    labOrders("My lab orders"),
+    prescriptions("My prescriptions"),
+    practice,
+  ],
   [UserRole.NURSE]: [overview, appointments(), patients, beds],
   [UserRole.RECEPTIONIST]: [overview, appointments("Schedule"), patients, invoices],
   [UserRole.LAB_TECHNICIAN]: [overview, labOrders("Lab queue")],

@@ -12,6 +12,7 @@ import { SAFE_USER_SELECT } from "../common/prisma/safe-user-select";
 import { PaginatedResult } from "../common/pagination/paginated-result";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
 import type { CreateStaffDto } from "./dto/create-staff.dto";
+import type { CreateHospitalAdminDto } from "./dto/create-hospital-admin.dto";
 import { STAFF_DIRECTORY_ROLES, type FindStaffQueryDto } from "./dto/find-staff-query.dto";
 
 /**
@@ -41,9 +42,23 @@ export class UsersService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    const hospitalId = caller.hospitalId;
+    return this.provision(caller.hospitalId, dto, caller.sub);
+  }
 
-    return TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, async () => {
+  /** FR-HOSP-001/002: a Super Admin gives a new hospital its first Hospital
+   * Admin (RBAC §3.1 "Create/manage staff accounts": SA any). `POST /users`
+   * can't do it, because it provisions into the caller's own hospital and a
+   * Super Admin has none. Added in the Phase 13B follow-up (D-042). */
+  async createHospitalAdmin(hospitalId: string, dto: CreateHospitalAdminDto, caller: AuthenticatedUser) {
+    const hospital = await TenantContext.bypass(() =>
+      this.prisma.hospital.findUnique({ where: { id: hospitalId }, select: { id: true } }),
+    );
+    if (!hospital) throw new NotFoundException("Hospital not found.");
+    return this.provision(hospitalId, { ...dto, role: UserRole.HOSPITAL_ADMIN }, caller.sub);
+  }
+
+  private async provision(hospitalId: string, dto: CreateStaffDto, actorId: string) {
+    return TenantContext.run({ hospitalId, userId: actorId, bypassTenancy: false }, async () => {
       const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
       if (existing) {
         throw new AppException(

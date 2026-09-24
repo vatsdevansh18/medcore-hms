@@ -23,12 +23,15 @@ import { CreateHospitalDto } from "./dto/create-hospital.dto";
 import { UpdateHospitalDto } from "./dto/update-hospital.dto";
 import { CreateDepartmentDto } from "./dto/create-department.dto";
 import { UpdateDepartmentDto } from "./dto/update-department.dto";
+import { UsersService } from "../users/users.service";
+import { CreateHospitalAdminDto } from "../users/dto/create-hospital-admin.dto";
 
 @Controller("hospitals")
 export class HospitalsController {
   constructor(
     private readonly hospitalsService: HospitalsService,
     private readonly departmentsService: DepartmentsService,
+    private readonly usersService: UsersService,
   ) {}
 
   @Roles(UserRole.SUPER_ADMIN)
@@ -44,6 +47,16 @@ export class HospitalsController {
   @HttpCode(HttpStatus.OK)
   verify(@Param("id") id: string) {
     return this.hospitalsService.verify(id);
+  }
+
+  /** The hospital's first (or another) Hospital Admin, by a Super Admin
+   * (D-042). Same pre-verified account and emailed password link as
+   * `POST /users`. */
+  @Roles(UserRole.SUPER_ADMIN)
+  @BypassTenantScope()
+  @Post(":id/admins")
+  createAdmin(@Param("id") id: string, @Body() dto: CreateHospitalAdminDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.createHospitalAdmin(id, dto, user);
   }
 
   @Roles(UserRole.SUPER_ADMIN)

@@ -17,6 +17,7 @@ import { RoleGate } from "@/components/modules/role-gate";
 import { StartEncounterForm } from "@/components/modules/encounter/start-encounter-form";
 import { VitalsPanel } from "@/components/modules/encounter/vitals-panel";
 import { AddendaPanel, AllergiesPanel } from "@/components/modules/encounter/notes-panels";
+import { AttachmentsPanel, FamilyHistoryPanel, VaccinationsPanel } from "@/components/modules/encounter/history-panels";
 import { PrescriptionPanel } from "@/components/modules/encounter/prescription-panel";
 import { LabOrderPanel } from "@/components/modules/encounter/lab-order-panel";
 import { useEncounterRecord, useStaffAppointment, useUpdateAppointmentStatus } from "@/services/workflows";
@@ -152,11 +153,14 @@ function Encounter({ appointmentId }: { appointmentId: string }) {
           <RecordSummary record={r} />
           {isDoctor && <PrescriptionPanel recordId={r.id} canWrite={ownVisit} />}
           {isDoctor && <LabOrderPanel recordId={r.id} canWrite={ownVisit} />}
+          <AttachmentsPanel recordId={r.id} attachments={r.attachments} />
           <AddendaPanel recordId={r.id} addenda={r.addenda} />
         </div>
         <div className="flex min-w-0 flex-col gap-4">
           <VitalsPanel recordId={r.id} vitals={r.vitals} />
           <AllergiesPanel patientId={a.patientId} />
+          <VaccinationsPanel patientId={a.patientId} />
+          <FamilyHistoryPanel patientId={a.patientId} />
         </div>
       </div>
     </>

@@ -53,6 +53,9 @@ const STYLES: Record<string, StatusStyle> = {
   ACTIVE: { label: "Active", tone: "success", icon: CheckCircle2 },
   QUARANTINED: { label: "Quarantined", tone: "danger", icon: Ban },
   DEPLETED: { label: "Used up", tone: "neutral", icon: CircleDashed },
+  // Hospitals
+  PENDING_VERIFICATION: { label: "Awaiting verification", tone: "warning", icon: Clock },
+  SUSPENDED: { label: "Suspended", tone: "danger", icon: Ban },
   DISABLED: { label: "Disabled", tone: "neutral", icon: Ban },
   // Payments
   SUCCEEDED: { label: "Succeeded", tone: "success", icon: CheckCircle2 },

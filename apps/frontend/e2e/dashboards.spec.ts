@@ -45,7 +45,7 @@ const ROLES: [string, string, string, string[]][] = [
   ["Lab Technician", `lab_technician@${CITY}`, "Laboratory queue", ["Overview", "Lab queue"]],
   ["Pharmacist", `pharmacist@${CITY}`, "Pharmacy", ["Overview", "Dispensing queue", "Medicines", "Stock alerts"]],
   ["Accountant", `accountant@${CITY}`, "Finance", ["Overview", "Bills", "Payments"]],
-  ["Super Admin", "superadmin@medcore.test", "Platform overview", ["Overview", "Audit log"]],
+  ["Super Admin", "superadmin@medcore.test", "Platform overview", ["Overview", "Hospitals", "Audit log"]],
 ];
 
 test.describe("role dashboards", () => {

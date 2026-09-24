@@ -14,10 +14,10 @@ Building **MedCore HMS**, a multi-tenant Hospital Management SaaS platform, as a
 - earlier session: Phases 11 and 12 committed; Phase 13 built and gated;
 - this session: the user said "continue" and chose "rerun, commit, then 13B". Phase 13 was committed as `e6d4a32` (its Playwright rerun first skipped because another project held port 3001), then **Phase 13B was built and gated PASS WITH DOCUMENTED MINOR ISSUES**.
 
-Current objective as of this handoff: **wait for the user.** Ask:
-1. whether to commit Phase 13B;
-2. whether the five API-complete requirements without a screen (see Current State) should get screens before Phase 14;
-3. then wait for "START PHASE 14" (UI/UX polish).
+Latest instruction (this session): "Do step 1 then step 2 then continue with START PHASE 14". So:
+1. Phase 13B was committed (`cfb6944`).
+2. The five missing screens were built as a 13B follow-up (D-042) and committed separately.
+3. **Phase 14 (UI/UX polish) is authorized and in progress.** See `docs/phase-reviews/PHASE-14-REVIEW.md` once written.
 
 ## Current State
 
@@ -28,7 +28,7 @@ Current objective as of this handoff: **wait for the user.** Ask:
   - Live Resend/Twilio: UNVERIFIED (no credentials).
   - Phase 13's UNVERIFIED Playwright rerun is **closed** (35/35 this session).
 
-**Git:** Phase 13 committed this session (`e6d4a32 feat: Phase 13 — analytics & dashboards`). **Phase 13B is NOT committed**; it's all in the working tree (see Next Steps #1). Exclude `.claude-flow/` when staging.
+**Git:** this session committed Phase 13 (`e6d4a32`), Phase 13B (`cfb6944`), and the 13B follow-up (the commit after it, "feat: Phase 13B follow-up — practice, EMR history, attachments, hospital onboarding"). Exclude `.claude-flow/` when staging.
 
 **Verified this session, after the last code change:**
 - **Backend:** typecheck and lint **PASS**; unit 5/5; full e2e **338/338, 17/17 suites** (289 + 47 in `staff-workflows.e2e-spec.ts` + 2 in `rate-limit.e2e-spec.ts`); two filter mutations caught.
@@ -37,7 +37,7 @@ Current objective as of this handoff: **wait for the user.** Ask:
 - **Console sweep:** every new screen as each role, no errors. **Screenshots** reviewed at 1440px and 390px.
 - **No leftover e2e rows** (0 `e2e-*` users) and no stray empty files.
 
-**Phase 13B's known gaps (the user should decide on them):** these work through the API and are tested there, but have no screen:
+**Phase 13B's five screen gaps were closed by the follow-up (D-042).** It also fixed two older defects: no browser upload to storage had ever worked (missing bucket CORS, since Phase 6), and a new hospital couldn't get its first admin. Verified: backend 346/346 (18 suites), Vitest 81/81, Playwright 38/38, both production images build. The original gap list, now closed:
 - the doctor's availability editor (FR-APPT-001);
 - vaccinations and family history entry (FR-EMR-005);
 - EMR attachment upload (FR-EMR-006);

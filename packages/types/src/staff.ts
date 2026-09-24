@@ -322,3 +322,98 @@ export interface UpdateHospitalRequest {
   patientRescheduleAllowed?: boolean;
   patientRescheduleCutoffHours?: number;
 }
+
+// ── Phase 13B follow-up (D-042) ─────────────────────────────────────────
+
+export interface AvailabilitySlotView {
+  id: string;
+  /** 0 = Sunday … 6 = Saturday. Times are the hospital's wall-clock HH:mm. */
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  slotDurationMinutes: number;
+  isActive: boolean;
+}
+
+export interface AvailabilityExceptionView {
+  id: string;
+  /** The hospital's calendar date, YYYY-MM-DD. */
+  date: string;
+  isUnavailable: boolean;
+  startTime: string | null;
+  endTime: string | null;
+  reason: string | null;
+}
+
+/** `GET /doctors/:id/schedule` (the doctor themselves). */
+export interface DoctorScheduleView {
+  timezone: string;
+  weekly: AvailabilitySlotView[];
+  exceptions: AvailabilityExceptionView[];
+}
+
+/** `PUT /doctors/:id/availability`: replaces the whole weekly schedule. */
+export interface SetAvailabilityRequest {
+  slots: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number; isActive?: boolean }[];
+}
+
+/** `POST /doctors/:id/availability-exceptions` (one per date; re-posting replaces it). */
+export interface AvailabilityExceptionRequest {
+  date: string;
+  isUnavailable: boolean;
+  startTime?: string;
+  endTime?: string;
+  reason?: string;
+}
+
+/** `POST /medical-records/:id/attachments` and `POST /doctors/:id/signature`:
+ * declare the file, then PUT its bytes to `uploadUrl` (pre-signed, 5 min). */
+export interface UploadRequest {
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+export interface AttachmentUploadView {
+  attachment: { id: string; fileName: string; mimeType: string; sizeBytes: number; createdAt: string };
+  uploadUrl: string;
+}
+
+export interface VaccinationRequest {
+  vaccineName: string;
+  doseNumber: number;
+  dateAdministered: string;
+  batchNumber?: string;
+  nextDueDate?: string;
+}
+
+/** `GET /hospitals` row (Super Admin). */
+export interface HospitalView {
+  id: string;
+  name: string;
+  slug: string;
+  status: "PENDING_VERIFICATION" | "ACTIVE" | "SUSPENDED";
+  contactEmail: string | null;
+  contactPhone: string | null;
+  timezone: string;
+  createdAt: string;
+}
+
+/** `POST /hospitals`: created PENDING_VERIFICATION. */
+export interface CreateHospitalRequest {
+  name: string;
+  slug: string;
+  contactEmail: string;
+  contactPhone?: string;
+  timezone?: string;
+  address?: { line1: string; line2?: string; city: string; state: string; postalCode: string; country: string };
+}
+
+/** `POST /hospitals/:id/admins` (Super Admin). */
+export interface CreateHospitalAdminRequest {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  employeeCode: string;
+}

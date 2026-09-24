@@ -38,6 +38,8 @@ export const ROUTES = {
   staffDirectory: "/dashboard/staff",
   departments: "/dashboard/departments",
   settings: "/dashboard/settings",
+  practice: "/dashboard/practice",
+  hospitals: "/dashboard/hospitals",
   portal: "/portal",
   appointments: "/portal/appointments",
   bookAppointment: "/portal/appointments/book",

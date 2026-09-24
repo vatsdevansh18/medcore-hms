@@ -83,7 +83,7 @@ Gate: a Playwright journey runs registration → booking → encounter → presc
 | FR-PHARM-001..003 (UI) | Verified | Journey (dispense); spec (`dispensedQuantity` after a partial dispense, patient name staff-only, no batch id leaked); `dispense.test.ts` |
 | FR-BILL-001/002/004/006 (UI) | Verified | Journey (automatic lines, finalise, cash, PAID); spec (staff invoice names the patient, patient view doesn't) |
 | RBAC (UI mirrors the API) | Verified | Playwright: pharmacist refused the encounter, registration, and bill screens; lab technician refused a prescription; the API returns 403 for the same calls. `staff-nav.test.ts` covers `WORKFLOW_ACCESS` |
-| Not delivered in 13B (see Known Minor Issues) | Open | FR-APPT-001 availability editor, FR-EMR-005 vaccinations and family history, FR-EMR-006 attachment upload, FR-RX-003 signature upload, FR-HOSP-001 Super Admin hospital onboarding: API-only |
+| Not delivered at the first 13B gate | **Closed by the follow-up** (see below) | FR-APPT-001 availability editor, FR-EMR-005 vaccinations and family history, FR-EMR-006 attachment upload, FR-RX-003 signature upload, FR-HOSP-001 Super Admin hospital onboarding |
 
 ## Files/Modules Changed
 
@@ -208,7 +208,7 @@ Checked against `04-UI-UX.md` §2.7, §2.8, §2.10, §6, §8, and the §9 checkl
 
 ## Known Minor Issues
 
-- **UI not built for some API-complete requirements.** They're outside the plan's explicit 13B screen list, but inside its "UI half of FR-…" wording. Each works through the API and is tested there.
+- ~~**UI not built for some API-complete requirements.**~~ **Closed by the follow-up below** (the user chose to build them before Phase 14). As first recorded: they were outside the plan's explicit 13B screen list, but inside its "UI half of FR-…" wording. Each worked through the API and was tested there.
   - the doctor's weekly availability and exceptions editor (FR-APPT-001);
   - vaccinations and family history entry (FR-EMR-005; allergies are built);
   - EMR attachment upload and download (FR-EMR-006);
@@ -248,12 +248,56 @@ Checked against `04-UI-UX.md` §2.7, §2.8, §2.10, §6, §8, and the §9 checkl
 - `PHASE-13-REVIEW.md`: the UNVERIFIED rerun is closed (history kept).
 - `HANDOFF.md`.
 
+## Follow-up: the five remaining screens (added after the first gate)
+
+After Phase 13B was committed (`cfb6944`), the user asked for the five screens listed under Known Minor Issues before Phase 14. They're built, and building them exposed two defects older than Phase 13B (D-042).
+
+**Implemented:**
+- **My practice** (`/dashboard/practice`, doctors):
+  - weekly hours editor (add, remove, and edit windows; overlap and range checks mirroring the API);
+  - days off and one-day hours changes, with removal;
+  - the prescription signature upload.
+- **Encounter workspace:** vaccinations, family history, and attachments panels (upload with a type and size check, open through a short-lived link).
+- **Hospitals** (`/dashboard/hospitals`, Super Admin): create a hospital (slug and time-zone validation, optional address), add its Hospital Admin, and verify it (confirmed).
+- **Backend:**
+  - `GET /doctors/:id/schedule` and `DELETE /doctors/:id/availability-exceptions/:date` (self only);
+  - `POST /hospitals/:id/admins` (Super Admin);
+  - an overlap check on `PUT /doctors/:id/availability`;
+  - the dev bucket CORS rule.
+- **`Panel` is a named region** (accessibility, and stable test scoping).
+
+**Bugs found:**
+1. **Every browser upload to storage failed (since Phase 6).** The bucket had no CORS rule, so the preflight from the web origin got 403 ("CORS is not enabled for this bucket"). That covered attachments, signatures, and lab report files. The specs uploaded only from Node, which ignores CORS. **Fixed** at the source (`S3Service.onModuleInit` applies the rule from `CORS_ORIGIN`; production needs it from infrastructure). Regression tests: the rule's contents, a real preflight (200 for the web origin, none for a foreign one), and a Playwright upload read back from storage.
+2. **A new hospital couldn't get its first Hospital Admin:** `POST /users` needs the caller's own hospital, and a Super Admin has none. **Fixed** with `POST /hospitals/:id/admins`. Tested: provisioning, a `role` in the body rejected, unknown hospital 404, non-Super-Admin 403, and anonymous 401.
+3. **Overlapping weekly windows were accepted,** which would offer the same time twice. **Fixed** in the API (400) and mirrored in the editor.
+4. **Test-side:**
+   - The portal booking test picked "the first doctor". Once the fixture added a run-specific doctor (with no hours at that point), it picked the wrong one. It now names the seeded doctor.
+   - The download helper listened for the popup's request after the popup opened, a race that fast links lose. It now listens on the browser context before clicking.
+   - `getByLabel("Name")` also matched "Short name (slug)".
+
+**Tests and results (after the last change):**
+- **Backend e2e:** 346/346 across 18 suites, adding `onboarding-schedule.e2e-spec.ts` (8). Backend unit 5/5.
+- **Frontend:** typecheck and lint pass; Vitest 81/81 (adds `schedule.test.ts`).
+- **Playwright 38/38.** This adds `practice-onboarding.spec.ts` (3): hours, day off, and signature; vaccinations, family history, and a real browser upload read back; Super Admin create, add admin, and verify, with the sign-up list gated on verification.
+- **Clean fixture teardown:** 0 `e2e-*` users or hospitals left. The fixture now creates its own doctor, so no seeded doctor's hours change.
+- **Build:** production frontend and API images (see the handoff for the run).
+
+**Security:**
+- The schedule reads are self only (a colleague or another hospital's doctor gets 404; other roles 403).
+- Admin provisioning is Super Admin only, and the role is fixed by the route.
+- The CORS rule lists the web origins only, with PUT and GET, never `*`.
+- Upload type and size are still enforced by the API; the browser check only mirrors them.
+
+**Remaining minor items:**
+- An attachment row is created when the upload is declared, so a failed or abandoned upload leaves a listed file whose link gives a storage 404. The API has no "confirm upload" step. This existed since Phase 6 and is now visible in the UI; candidate for Phase 15.
+- Hospital suspension and editing another hospital's details aren't on the Super Admin screen (FR-HOSP-001 is create and verify).
+
 ## Final Gate
 
-**PASS WITH DOCUMENTED MINOR ISSUES.**
+**PASS WITH DOCUMENTED MINOR ISSUES** (reaffirmed after the follow-up, which closed the five screen gaps).
 
 Every screen in the plan's 13B list is built, wired to the real API, and exercised. The gate test (the whole patient journey through the UI, with four-eyes lab approval and automatic billing) passes, as do the negative access checks in the UI and the API, the full backend suite (338/338), and the full browser suite (35/35). No critical or high-severity defect is open.
 
-The minor items are the five API-complete requirements without a screen (listed above for the user to schedule), the documented scope choices, and the carried provider items.
+The minor items at the first gate were the five API-complete requirements without a screen; the follow-up above built them and fixed the two older defects they exposed. What remains is minor: the documented scope choices, the attachment confirm step, and the carried provider items.
 
 Phase 14 doesn't start until the user says so.

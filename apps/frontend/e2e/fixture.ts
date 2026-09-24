@@ -12,6 +12,12 @@ export interface PortalFixture {
   patientB: { email: string; profileId: string; appointmentId: string };
   doctorEmail: string;
   doctorId: string;
+  /** A doctor created for this run only (schedule and signature journeys). */
+  ownDoctorEmail: string;
+  ownDoctorId: string;
+  /** Used by the Super Admin onboarding journey; removed at teardown. */
+  newHospitalSlug: string;
+  newHospitalAdminEmail: string;
   receptionistEmail: string;
   labTechEmail: string;
   labApproverEmail: string;

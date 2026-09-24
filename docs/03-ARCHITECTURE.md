@@ -88,6 +88,7 @@ Folder structure and component strategy are detailed in `04-UI-UX.md`.
 - The encounter workspace is assembled from panels in `components/modules/encounter/` (start form, vitals, addenda and allergies, prescribing, lab ordering).
 - Screens reached from a list are listed with their roles in `WORKFLOW_ACCESS` (`staff-nav.ts`) for `RoleGate`. Which buttons a role sees comes from pure helpers that mirror the API's rules (`lib/appointment-actions.ts`, `lib/dispense.ts`). None of this is security; the API enforces every rule.
 - Form schemas mirror the backend DTOs (`lib/staff-validation.ts`); every consequential action goes through `ConfirmDialog` (`04-UI-UX.md` §8).
+- Browser uploads (attachments, signature) check type and size against the API's allow-lists (`lib/upload.ts`), declare the file to the API, then PUT the bytes to the returned pre-signed URL. That needs a bucket CORS rule for the web origin: the dev bucket gets it at API start, a production bucket from infrastructure (D-042).
 
 ## 3. Backend Architecture
 

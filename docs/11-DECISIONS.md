@@ -622,3 +622,35 @@ Two Phase 9/10 channel choices change to match the brief:
 - **The e2e suite clears the auth rate limiter before each spec file** (`test/helpers/reset-rate-limits.ts`). All specs share one loopback IP and run serially, and this phase took the suite past 100 logins in 15 minutes, so every later spec failed with 429. The limiter itself is now tested on its own (`test/rate-limit.e2e-spec.ts`); nothing had tested it before.
 
 **Rejected:** giving the receptionist lab-order reads just for the collection button (widens clinical visibility for one step the lab already does); a batch picker on the dispense screen (FEFO is the policy, and a manual override is an exception the API already refuses with `expectedBatchId`); raising the auth throttle limit through an env var for tests (changes production configuration surface to suit a test harness); fetching an encounter by paging through a patient's records (fragile past the first page).
+
+---
+
+## D-042 — The last five staff screens, and two gaps they exposed (Phase 13B follow-up)
+
+**Context:** Phase 13B's review listed five API-complete requirements without a screen:
+- the doctor's availability editor (FR-APPT-001);
+- vaccinations and family history (FR-EMR-005);
+- EMR attachments (FR-EMR-006);
+- the prescription signature (FR-RX-003);
+- Super Admin hospital onboarding (FR-HOSP-001).
+
+The user asked for them before Phase 14. Building them exposed two defects older than Phase 13B:
+- **No browser upload had ever worked.** Attachments (Phase 6), signatures (Phase 7), and lab report files (Phase 8) all upload by a browser PUT to a pre-signed URL, and the bucket had no CORS rule. LocalStack refused the preflight ("CORS is not enabled for this bucket"), as real S3 would. The e2e specs only uploaded from Node, which doesn't enforce CORS, so nothing caught it.
+- **A new hospital could never get its first Hospital Admin.** `POST /users` provisions into the caller's own hospital, and a Super Admin has none. RBAC §3.1 gives the Super Admin staff accounts in any hospital.
+
+**Decision:**
+- **Bucket CORS:** `S3Service.onModuleInit` applies a CORS rule to the dev bucket on every start: the `CORS_ORIGIN` origins, PUT and GET only, the `content-type` header, and `ETag` exposed. A production bucket needs the same rule from infrastructure (Phase 16); app code never configures a real AWS bucket (D-015). Tested: the rule is present, a preflight from the web origin gets 200 with the origin echoed, and a foreign origin gets no allow header. Playwright uploads a file and reads it back.
+- **`POST /hospitals/:id/admins`** (Super Admin, `@BypassTenantScope()`): creates a HOSPITAL_ADMIN in that hospital through the same provisioning as `POST /users` (pre-verified, emailed password link). The role is fixed by the route; a `role` field in the body is rejected. Unknown hospital → 404.
+- **`GET /doctors/:id/schedule`** (the doctor themselves): the weekly hours plus exceptions from today in the hospital's calendar. **`DELETE /doctors/:id/availability-exceptions/:date`** restores a date's weekly hours. Nothing could read the weekly template before; it was only computed into slots.
+- **Weekly windows on the same weekday may touch but not overlap** (`PUT /doctors/:id/availability` → 400). Before this, overlapping windows were accepted and would offer the same time twice. The editor mirrors the rule (`lib/schedule.ts`).
+- **Screens:**
+  - the doctor's "My practice" (weekly hours, days off and one-day changes, signature upload);
+  - vaccination, family history, and attachment panels in the encounter workspace;
+  - the Super Admin's "Hospitals" (create, add admin, verify).
+  - Uploads check type and size in the browser against the API's own allow-lists (`lib/upload.ts`), then PUT straight to storage.
+- **`Panel` is now a named region** (`role="region"` labelled by its title), so screen readers can jump between panels and tests can scope to one.
+
+**Rejected:**
+- relaxing CORS to `*` (any site could then use a leaked pre-signed URL from a victim's browser session);
+- proxying uploads through the API (against `03-ARCHITECTURE.md` §10: the API never carries file bytes);
+- letting `POST /users` accept a `hospitalId` for Super Admins (it would mix the tenant-from-JWT rule into a route every Hospital Admin uses).

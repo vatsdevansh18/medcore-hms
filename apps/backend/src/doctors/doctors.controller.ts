@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from "@nestjs/common";
 import { UserRole } from "@medcore/types";
 import { Roles, ALL_ROLES } from "../auth/decorators/roles.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -58,6 +58,23 @@ export class DoctorsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.availabilityService.computeAvailability(id, user, query.dateFrom, query.dateTo);
+  }
+
+  /** The doctor's own weekly hours and upcoming exceptions (D-042). */
+  @Roles(UserRole.DOCTOR)
+  @Get(":id/schedule")
+  getSchedule(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.availabilityService.getSchedule(id, user);
+  }
+
+  @Roles(UserRole.DOCTOR)
+  @Delete(":id/availability-exceptions/:date")
+  deleteAvailabilityException(
+    @Param("id") id: string,
+    @Param("date") date: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.availabilityService.deleteException(id, date, user);
   }
 
   @Roles(UserRole.DOCTOR)

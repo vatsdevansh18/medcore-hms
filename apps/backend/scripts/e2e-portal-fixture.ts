@@ -32,7 +32,14 @@ const emails = (runId: string) => ({
   registered: `e2e-reg-${runId}@patient.medcore.test`,
   // Registered at the front desk by the Phase 13B staff journey, through the UI.
   journey: `e2e-journey-${runId}@patient.medcore.test`,
+  // A doctor of the run's own, so the schedule and signature journeys never
+  // change a seeded doctor's hours (Phase 13B follow-up).
+  doctor: `e2e-doc-${runId}@medcore-city.medcore.test`,
+  // The Hospital Admin the Super Admin journey provisions, and its hospital.
+  hospitalAdmin: `e2e-ha-${runId}@medcore.test`,
 });
+
+const hospitalSlug = (runId: string) => `e2e-${runId}`;
 
 async function setup(runId: string) {
   const hospital = await prisma.hospital.findUniqueOrThrow({ where: { slug: HOSPITAL_SLUG } });
@@ -100,6 +107,29 @@ async function setup(runId: string) {
   const visitA = await visit(patientA.id, 3);
   const visitB = await visit(patientB.id, 4);
 
+  const ownDoctorUser = await prisma.user.create({
+    data: {
+      hospitalId: hospital.id,
+      email: e.doctor,
+      passwordHash,
+      firstName: "Esha",
+      lastName: "Schedule",
+      role: "DOCTOR",
+      status: "ACTIVE",
+      emailVerifiedAt: new Date(),
+    },
+  });
+  const ownDoctor = await prisma.doctorProfile.create({
+    data: {
+      userId: ownDoctorUser.id,
+      hospitalId: hospital.id,
+      departmentId: doctor.departmentId,
+      specialization: "Family Medicine",
+      licenseNumber: `E2E-${runId}`,
+      consultationFee: 300,
+    },
+  });
+
   const labTest = await prisma.labTest.findFirstOrThrow({ where: { hospitalId: hospital.id } });
   const medicine = await prisma.medicine.findFirstOrThrow({ where: { hospitalId: hospital.id, deletedAt: null } });
 
@@ -112,6 +142,10 @@ async function setup(runId: string) {
       patientB: { email: e.patientB, profileId: patientB.id, appointmentId: visitB.id },
       doctorEmail: doctor.user.email,
       doctorId: doctor.id,
+      ownDoctorEmail: e.doctor,
+      ownDoctorId: ownDoctor.id,
+      newHospitalSlug: hospitalSlug(runId),
+      newHospitalAdminEmail: e.hospitalAdmin,
       receptionistEmail: `receptionist@${HOSPITAL_SLUG}.medcore.test`,
       labTechEmail: `lab_technician@${HOSPITAL_SLUG}.medcore.test`,
       labApproverEmail: e.labApprover,
@@ -151,11 +185,27 @@ async function teardown(runId: string) {
   await prisma.medicalRecord.deleteMany({ where: byPatient });
   await prisma.appointment.deleteMany({ where: byPatient });
   await prisma.allergy.deleteMany({ where: byPatient });
+  await prisma.vaccinationRecord.deleteMany({ where: byPatient });
+  await prisma.familyHistoryFlag.deleteMany({ where: byPatient });
   await prisma.patientProfile.deleteMany({ where: { id: { in: patientIds } } });
+  const ownDoctors = await prisma.doctorProfile.findMany({ where: { userId: { in: userIds } }, select: { id: true } });
+  const byDoctor = { doctorId: { in: ownDoctors.map((d) => d.id) } };
+  await prisma.doctorAvailabilityException.deleteMany({ where: byDoctor });
+  await prisma.doctorAvailability.deleteMany({ where: byDoctor });
+  await prisma.doctorProfile.deleteMany({ where: { id: { in: ownDoctors.map((d) => d.id) } } });
+  await prisma.staffProfile.deleteMany({ where: { userId: { in: userIds } } });
   // Test accounts only (the backend suite cleans up its own the same way).
   await prisma.auditLog.deleteMany({ where: { actorUserId: { in: userIds } } });
   await prisma.refreshTokenSession.deleteMany({ where: { userId: { in: userIds } } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+  // The hospital the Super Admin journey created, if it got that far.
+  const created = await prisma.hospital.findUnique({ where: { slug: hospitalSlug(runId) } });
+  if (created) {
+    await prisma.department.deleteMany({ where: { hospitalId: created.id } });
+    await prisma.auditLog.deleteMany({ where: { hospitalId: created.id } });
+    await prisma.hospital.delete({ where: { id: created.id } });
+    if (created.addressId) await prisma.address.delete({ where: { id: created.addressId } }).catch(() => undefined);
+  }
   process.stdout.write(JSON.stringify({ removedUsers: userIds.length }));
 }
 

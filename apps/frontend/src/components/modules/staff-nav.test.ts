@@ -9,7 +9,10 @@ describe("staff navigation mirrors the RBAC matrix", () => {
     const labels = (role: UserRole) => navFor(role).map((i) => i.label);
     expect(labels(UserRole.PHARMACIST)).toEqual(["Overview", "Dispensing queue", "Medicines", "Stock alerts"]);
     expect(labels(UserRole.LAB_TECHNICIAN)).toEqual(["Overview", "Lab queue"]);
-    expect(labels(UserRole.SUPER_ADMIN)).toEqual(["Overview", "Audit log"]);
+    expect(labels(UserRole.SUPER_ADMIN)).toEqual(["Overview", "Hospitals", "Audit log"]);
+    expect(labels(UserRole.DOCTOR)).toContain("My practice");
+    expect(canOpen(UserRole.HOSPITAL_ADMIN, ROUTES.hospitals)).toBe(false);
+    expect(canOpen(UserRole.NURSE, ROUTES.practice)).toBe(false);
   });
 
   it("lets pages refuse a hand-typed URL outside the role's workspace", () => {
