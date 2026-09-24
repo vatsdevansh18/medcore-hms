@@ -216,6 +216,19 @@ export class AuthService {
           emailVerifiedAt: true,
           phoneVerifiedAt: true,
           createdAt: true,
+          // Phase 12: the portal needs the caller's own PatientProfile id
+          // (the EMR routes are keyed by it) and the hospital's name,
+          // timezone, and reschedule policy (CurrentUser, packages/types).
+          patientProfile: { select: { id: true } },
+          hospital: {
+            select: {
+              id: true,
+              name: true,
+              timezone: true,
+              patientRescheduleAllowed: true,
+              patientRescheduleCutoffHours: true,
+            },
+          },
         },
       }),
     );
@@ -226,6 +239,7 @@ export class AuthService {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    return user;
+    const { patientProfile, hospital, ...rest } = user;
+    return { ...rest, patientProfileId: patientProfile?.id ?? null, hospital: hospital ?? null };
   }
 }

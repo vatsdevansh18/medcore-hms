@@ -7,6 +7,8 @@ import { InvoicesService } from "./invoices.service";
 import { InvoicesController } from "./invoices.controller";
 import { PaymentsService } from "./payments/payments.service";
 import { PaymentWebhooksController } from "./payments/payment-webhooks.controller";
+import { PaymentsController } from "./payments/payments.controller";
+import { ReceiptsService } from "./payments/receipts.service";
 import { CheckoutClient } from "./payments/checkout-client";
 import { PaymentWebhookVerifier } from "./payments/payment-webhook-verifier";
 
@@ -15,7 +17,7 @@ import { PaymentWebhookVerifier } from "./payments/payment-webhook-verifier";
  * add charges inside their own transactions (FR-BILL-001). */
 @Module({
   imports: [AuthModule, NotificationsModule],
-  controllers: [InvoicesController, PaymentWebhooksController],
+  controllers: [InvoicesController, PaymentWebhooksController, PaymentsController],
   providers: [
     ChargesService,
     InvoiceLedgerService,
@@ -23,6 +25,7 @@ import { PaymentWebhookVerifier } from "./payments/payment-webhook-verifier";
     PaymentsService,
     CheckoutClient,
     PaymentWebhookVerifier,
+    ReceiptsService,
   ],
   exports: [ChargesService],
 })

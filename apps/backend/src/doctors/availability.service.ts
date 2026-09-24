@@ -5,6 +5,7 @@ import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
 import { AppException } from "../common/errors/app-exception";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
+import { addDaysToKey, weekdayOf, zonedWallTimeToUtc } from "../common/time/zoned-time";
 import type { SetAvailabilityDto } from "./dto/availability-slot.dto";
 import type { CreateAvailabilityExceptionDto } from "./dto/create-availability-exception.dto";
 
@@ -28,12 +29,12 @@ const MAX_RANGE_DAYS = 31;
  * `DoctorProfile.id`, resolved and hospital-checked first, before any
  * availability row is touched.
  *
- * All wall-clock times (`DoctorAvailability.startTime`/`endTime`,
- * `Appointment.scheduledStart`/`scheduledEnd`) are treated as UTC for v1 —
- * `Hospital.timezone` is stored but not yet consulted by scheduling logic,
- * a documented simplification (docs/11-DECISIONS.md) rather than an
- * oversight; every hospital in this deployment is assumed to operate on UTC
- * wall-clock time until real per-hospital timezone conversion is built.
+ * `DoctorAvailability.startTime`/`endTime` (and exception times) are the
+ * doctor's local wall-clock times in the hospital's `Hospital.timezone`;
+ * `Appointment.scheduledStart`/`scheduledEnd` are UTC instants. The
+ * `dateFrom`/`dateTo` range and each `DaySlots.date` are the hospital's local
+ * calendar dates. (Until Phase 12 every wall-clock time was treated as UTC;
+ * docs/11-DECISIONS.md D-037 records the fix.)
  */
 @Injectable()
 export class AvailabilityService {
@@ -180,7 +181,17 @@ export class AvailabilityService {
     return TenantContext.run(
       { hospitalId: caller.hospitalId!, userId: caller.sub, bypassTenancy: false },
       async () => {
+        // Exception dates are calendar dates (Postgres DATE, UTC midnight).
         const rangeEndExclusive = new Date(end.getTime() + 86_400_000);
+        const hospital = await this.prisma.hospital.findUnique({
+          where: { id: doctor.hospitalId },
+          select: { timezone: true },
+        });
+        const timeZone = hospital?.timezone ?? "Asia/Kolkata";
+        // The instants covering the local dates, with a day's margin either
+        // side so an appointment overlapping a range edge is still seen.
+        const windowStart = zonedWallTimeToUtc(addDaysToKey(dateFrom, -1), "00:00", timeZone);
+        const windowEnd = zonedWallTimeToUtc(addDaysToKey(dateTo, 2), "00:00", timeZone);
 
         const [weekly, exceptions, appointments] = await Promise.all([
           this.prisma.doctorAvailability.findMany({ where: { doctorId, isActive: true } }),
@@ -190,7 +201,7 @@ export class AvailabilityService {
           this.prisma.appointment.findMany({
             where: {
               doctorId,
-              scheduledStart: { gte: start, lt: rangeEndExclusive },
+              scheduledStart: { gte: windowStart, lt: windowEnd },
               status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW] },
             },
           }),
@@ -215,7 +226,7 @@ export class AvailabilityService {
           if (exception?.isUnavailable) {
             windows = [];
           } else if (exception && exception.startTime && exception.endTime) {
-            const fallbackDuration = weeklyByDay.get(cursor.getUTCDay())?.[0]?.slotDurationMinutes ?? 30;
+            const fallbackDuration = weeklyByDay.get(weekdayOf(dateKey))?.[0]?.slotDurationMinutes ?? 30;
             windows = [
               {
                 startTime: exception.startTime,
@@ -224,11 +235,11 @@ export class AvailabilityService {
               },
             ];
           } else {
-            windows = weeklyByDay.get(cursor.getUTCDay()) ?? [];
+            windows = weeklyByDay.get(weekdayOf(dateKey)) ?? [];
           }
 
           const daySlots = windows.flatMap((window) =>
-            this.generateCandidateSlots(dateKey, window),
+            this.generateCandidateSlots(dateKey, window, timeZone),
           );
 
           const now = new Date();
@@ -251,10 +262,11 @@ export class AvailabilityService {
   private generateCandidateSlots(
     dateKey: string,
     window: { startTime: string; endTime: string; slotDurationMinutes: number },
+    timeZone: string,
   ): ComputedSlot[] {
     const slots: ComputedSlot[] = [];
-    let cursor = new Date(`${dateKey}T${window.startTime}:00.000Z`);
-    const windowEnd = new Date(`${dateKey}T${window.endTime}:00.000Z`);
+    let cursor = zonedWallTimeToUtc(dateKey, window.startTime, timeZone);
+    const windowEnd = zonedWallTimeToUtc(dateKey, window.endTime, timeZone);
     const durationMs = window.slotDurationMinutes * 60_000;
 
     while (cursor.getTime() + durationMs <= windowEnd.getTime()) {

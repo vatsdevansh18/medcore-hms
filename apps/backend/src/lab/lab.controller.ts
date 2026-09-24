@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { UserRole } from "@medcore/types";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -8,6 +8,7 @@ import { CreateLabOrderDto } from "./dto/create-lab-order.dto";
 import { UpdateLabOrderItemStatusDto } from "./dto/update-lab-order-item-status.dto";
 import { EnterLabResultDto } from "./dto/enter-lab-result.dto";
 import { ApproveLabResultDto } from "./dto/approve-lab-result.dto";
+import { PaginationQueryDto } from "../common/pagination/pagination-query.dto";
 
 const VIEW_ROLES: UserRole[] = [UserRole.DOCTOR, UserRole.NURSE, UserRole.LAB_TECHNICIAN, UserRole.PATIENT];
 const STATUS_UPDATE_ROLES: UserRole[] = [UserRole.RECEPTIONIST, UserRole.LAB_TECHNICIAN];
@@ -20,6 +21,13 @@ export class LabController {
   @Post()
   create(@Body() dto: CreateLabOrderDto, @CurrentUser() user: AuthenticatedUser) {
     return this.labService.create(dto, user);
+  }
+
+  /** FR-PORTAL-001: a patient's own lab orders (docs/11-DECISIONS.md D-035). */
+  @Roles(UserRole.PATIENT)
+  @Get()
+  findMine(@Query() query: PaginationQueryDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.labService.findMine(query, user);
   }
 
   @Roles(...VIEW_ROLES)

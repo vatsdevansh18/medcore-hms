@@ -16,11 +16,28 @@ import type { BookAppointmentDto } from "./dto/book-appointment.dto";
 import type { CreateEmergencyAppointmentDto } from "./dto/create-emergency-appointment.dto";
 import type { UpdateAppointmentStatusDto } from "./dto/update-appointment-status.dto";
 import type { FindAppointmentsQueryDto } from "./dto/find-appointments-query.dto";
+import type { RescheduleAppointmentDto } from "./dto/reschedule-appointment.dto";
+import { localDateKey } from "../common/time/zoned-time";
 
+/** The doctor side is a narrow projection: every role reading an
+ * appointment (including the patient) sees the doctor's name and
+ * specialization, never their contact details or the signature image's
+ * storage key (docs/11-DECISIONS.md D-036). */
 const APPOINTMENT_INCLUDE = {
-  doctor: { include: { user: { select: SAFE_USER_SELECT } } },
+  doctor: {
+    select: {
+      id: true,
+      userId: true,
+      departmentId: true,
+      specialization: true,
+      user: { select: { id: true, firstName: true, lastName: true } },
+    },
+  },
   patient: { include: { user: { select: SAFE_USER_SELECT } } },
 } as const;
+
+/** Statuses a patient may still move to a different time (D-035). */
+const RESCHEDULABLE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
 
 /**
  * FR-APPT-005 state machine, restricted per docs/07-RBAC-MATRIX.md §3.3's
@@ -141,6 +158,51 @@ export class AppointmentsService {
     throw err as Error;
   }
 
+  /**
+   * FR-APPT-002: the requested window must be a genuinely open,
+   * schedule-aligned slot, not just any client-chosen timestamp pair. The DB
+   * exclusion constraint is the final word on a true race, but this check
+   * rejects a fabricated/misaligned slot before it ever reaches SQL. The slot
+   * is looked up on the hospital-local date it starts on (D-037).
+   */
+  private async assertOpenSlot(
+    doctorId: string,
+    caller: AuthenticatedUser,
+    hospitalId: string,
+    startInput: string,
+    endInput: string,
+  ): Promise<{ scheduledStart: Date; scheduledEnd: Date }> {
+    const scheduledStart = new Date(startInput);
+    const scheduledEnd = new Date(endInput);
+    if (
+      Number.isNaN(scheduledStart.getTime()) ||
+      Number.isNaN(scheduledEnd.getTime()) ||
+      scheduledStart >= scheduledEnd
+    ) {
+      throw new AppException(
+        ApiErrorCode.VALIDATION_ERROR,
+        "scheduledStart must be a valid timestamp before scheduledEnd.",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const dateKey = localDateKey(scheduledStart, await this.hospitalTimezone(hospitalId));
+    const [day] = await this.availabilityService.computeAvailability(doctorId, caller, dateKey, dateKey);
+    const isOpenSlot = day?.slots.some(
+      (slot) =>
+        slot.start.getTime() === scheduledStart.getTime() &&
+        slot.end.getTime() === scheduledEnd.getTime(),
+    );
+    if (!isOpenSlot) {
+      throw new AppException(
+        ApiErrorCode.SLOT_UNAVAILABLE,
+        "The requested time is not an open slot for this doctor.",
+        HttpStatus.CONFLICT,
+      );
+    }
+    return { scheduledStart, scheduledEnd };
+  }
+
   async book(dto: BookAppointmentDto, caller: AuthenticatedUser) {
     if (!caller.hospitalId) {
       throw new AppException(
@@ -183,43 +245,13 @@ export class AppointmentsService {
     );
     if (!doctor) throw new NotFoundException("Doctor not found.");
 
-    const scheduledStart = new Date(dto.scheduledStart);
-    const scheduledEnd = new Date(dto.scheduledEnd);
-    if (
-      Number.isNaN(scheduledStart.getTime()) ||
-      Number.isNaN(scheduledEnd.getTime()) ||
-      scheduledStart >= scheduledEnd
-    ) {
-      throw new AppException(
-        ApiErrorCode.VALIDATION_ERROR,
-        "scheduledStart must be a valid timestamp before scheduledEnd.",
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // FR-APPT-002 — re-verify the requested window is a genuinely open,
-    // schedule-aligned slot, not just any client-chosen timestamp pair. The
-    // DB exclusion constraint is the final word on a true race, but this
-    // check rejects a fabricated/misaligned slot before it ever reaches SQL.
-    const dateKey = scheduledStart.toISOString().slice(0, 10);
-    const [day] = await this.availabilityService.computeAvailability(
+    const { scheduledStart, scheduledEnd } = await this.assertOpenSlot(
       doctor.id,
       caller,
-      dateKey,
-      dateKey,
+      hospitalId,
+      dto.scheduledStart,
+      dto.scheduledEnd,
     );
-    const isOpenSlot = day?.slots.some(
-      (slot) =>
-        slot.start.getTime() === scheduledStart.getTime() &&
-        slot.end.getTime() === scheduledEnd.getTime(),
-    );
-    if (!isOpenSlot) {
-      throw new AppException(
-        ApiErrorCode.SLOT_UNAVAILABLE,
-        "The requested time is not an open slot for this doctor.",
-        HttpStatus.CONFLICT,
-      );
-    }
 
     return TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, async () => {
       try {
@@ -397,6 +429,97 @@ export class AppointmentsService {
     return updated;
   }
 
+  /**
+   * FR-PORTAL-002: a patient moves their own PENDING or CONFIRMED appointment
+   * to another open slot with the same doctor, if the hospital allows it and
+   * the current start is more than the cutoff away (docs/11-DECISIONS.md
+   * D-035). The appointment keeps its id and goes back to PENDING, so staff
+   * confirm the new time (which schedules fresh reminders); the old
+   * reminders are cancelled. The move is one conditional UPDATE: the DB
+   * exclusion constraints decide a race for the new slot, and a concurrent
+   * status change or second reschedule gets a 409.
+   */
+  async reschedule(id: string, dto: RescheduleAppointmentDto, caller: AuthenticatedUser) {
+    if (!caller.hospitalId) throw new NotFoundException("Appointment not found.");
+    const hospitalId = caller.hospitalId;
+    const scope = { hospitalId, userId: caller.sub, bypassTenancy: false };
+
+    const [appointment, hospital] = await TenantContext.run(scope, () =>
+      Promise.all([
+        this.prisma.appointment.findUnique({ where: { id }, include: APPOINTMENT_INCLUDE }),
+        this.prisma.hospital.findUnique({
+          where: { id: hospitalId },
+          select: { patientRescheduleAllowed: true, patientRescheduleCutoffHours: true },
+        }),
+      ]),
+    );
+    if (!appointment || appointment.deletedAt || appointment.patient.userId !== caller.sub) {
+      throw new NotFoundException("Appointment not found.");
+    }
+
+    if (!hospital?.patientRescheduleAllowed) {
+      throw new AppException(
+        ApiErrorCode.RESCHEDULE_NOT_ALLOWED,
+        "This hospital doesn't allow appointments to be rescheduled online. Please contact the front desk.",
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (appointment.type === AppointmentType.EMERGENCY) {
+      throw new AppException(
+        ApiErrorCode.RESCHEDULE_NOT_ALLOWED,
+        "Emergency appointments can't be rescheduled.",
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (!RESCHEDULABLE_STATUSES.includes(appointment.status)) {
+      throw new AppException(
+        ApiErrorCode.VALIDATION_ERROR,
+        `A ${appointment.status} appointment can't be rescheduled.`,
+        HttpStatus.CONFLICT,
+      );
+    }
+    const cutoffMs = hospital.patientRescheduleCutoffHours * 3_600_000;
+    if (appointment.scheduledStart.getTime() - Date.now() < cutoffMs) {
+      throw new AppException(
+        ApiErrorCode.RESCHEDULE_NOT_ALLOWED,
+        `Appointments can only be rescheduled online more than ${hospital.patientRescheduleCutoffHours} hours in advance. Please contact the front desk.`,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        { cutoffHours: hospital.patientRescheduleCutoffHours },
+      );
+    }
+
+    const { scheduledStart, scheduledEnd } = await this.assertOpenSlot(
+      appointment.doctorId,
+      caller,
+      hospitalId,
+      dto.scheduledStart,
+      dto.scheduledEnd,
+    );
+
+    const updated = await TenantContext.run(scope, async () => {
+      try {
+        return await this.prisma.appointment.update({
+          // Conditional on the state that was just validated.
+          where: { id, status: appointment.status, scheduledStart: appointment.scheduledStart },
+          data: { scheduledStart, scheduledEnd, status: AppointmentStatus.PENDING },
+          include: APPOINTMENT_INCLUDE,
+        });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+          throw new AppException(
+            ApiErrorCode.VALIDATION_ERROR,
+            "The appointment changed while this request was in flight. Reload and try again.",
+            HttpStatus.CONFLICT,
+          );
+        }
+        this.translateBookingConflict(err);
+      }
+    });
+
+    await this.safeReminderCall(() => this.reminderQueue.cancelReminders(id), "cancellation");
+    return updated;
+  }
+
   async findAll(query: FindAppointmentsQueryDto, caller: AuthenticatedUser) {
     const baseWhere: Record<string, unknown> = { deletedAt: null };
     if (query.status) baseWhere.status = query.status;
@@ -414,7 +537,7 @@ export class AppointmentsService {
             where: baseWhere,
             skip: query.skip,
             take: query.limit,
-            orderBy: { scheduledStart: "desc" },
+            orderBy: { scheduledStart: query.sortOrder ?? "desc" },
             include: APPOINTMENT_INCLUDE,
           }),
           this.prisma.appointment.count({ where: baseWhere }),
@@ -441,7 +564,7 @@ export class AppointmentsService {
           where,
           skip: query.skip,
           take: query.limit,
-          orderBy: { scheduledStart: "desc" },
+          orderBy: { scheduledStart: query.sortOrder ?? "desc" },
           include: APPOINTMENT_INCLUDE,
         }),
         this.prisma.appointment.count({ where }),

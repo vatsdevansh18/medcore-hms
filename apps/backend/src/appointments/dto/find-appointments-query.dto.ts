@@ -14,4 +14,10 @@ export class FindAppointmentsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsDateString()
   dateTo?: string;
+
+  /** Order by `scheduledStart` (default `desc`, newest first). The portal
+   * lists upcoming visits soonest first (Phase 12). */
+  @IsOptional()
+  @IsIn(["asc", "desc"])
+  sortOrder?: "asc" | "desc";
 }

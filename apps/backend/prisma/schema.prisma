@@ -225,17 +225,22 @@ model Address {
 /// Not tenant-scoped (it IS the tenant). Never auto-scoped by the tenant
 /// Prisma extension — see src/common/tenancy/tenant-scoping.extension.ts.
 model Hospital {
-  id           String         @id @default(uuid())
-  name         String
-  slug         String         @unique
-  status       HospitalStatus @default(PENDING_VERIFICATION)
-  addressId    String?
-  address      Address?       @relation(fields: [addressId], references: [id])
-  contactEmail String
-  contactPhone String?
-  timezone     String         @default("Asia/Kolkata")
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id                           String         @id @default(uuid())
+  name                         String
+  slug                         String         @unique
+  status                       HospitalStatus @default(PENDING_VERIFICATION)
+  addressId                    String?
+  address                      Address?       @relation(fields: [addressId], references: [id])
+  contactEmail                 String
+  contactPhone                 String?
+  timezone                     String         @default("Asia/Kolkata")
+  /// Patient-portal reschedule policy (FR-PORTAL-002 "if the hospital's
+  /// policy allows", docs/11-DECISIONS.md D-035).
+  patientRescheduleAllowed     Boolean        @default(true)
+  /// A patient can't reschedule within this many hours of the current start.
+  patientRescheduleCutoffHours Int            @default(24)
+  createdAt                    DateTime       @default(now())
+  updatedAt                    DateTime       @updatedAt
 
   departments    Department[]
   users          User[]
@@ -915,6 +920,9 @@ model Payment {
   rawPayloadSanitized       Json?
   /// Staff user who recorded a CASH payment; null for provider payments.
   recordedBy                String?
+  /// S3 storage key of the rendered receipt PDF, set the first time the
+  /// receipt is requested (Phase 12). Never returned to clients.
+  receiptUrl                String?
   createdAt                 DateTime      @default(now())
 
   @@index([hospitalId])

@@ -92,6 +92,10 @@ describe("Appointments (e2e)", () => {
           slug: `appt-test-${suffix}`,
           status: HospitalStatus.ACTIVE,
           contactEmail: `appt-${suffix}@test.medcore.test`,
+          // Slot assertions below are written in UTC wall-clock time. Since
+          // Phase 12 (D-037) schedules are read in the hospital timezone;
+          // portal.e2e-spec.ts covers a non-UTC (Asia/Kolkata) hospital.
+          timezone: "UTC",
         },
       }),
     );

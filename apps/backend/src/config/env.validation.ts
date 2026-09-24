@@ -87,6 +87,13 @@ export class EnvironmentVariables {
   @IsOptional()
   S3_ENDPOINT: string = "";
 
+  // Phase 12: the address browsers use for S3, when it differs from
+  // S3_ENDPOINT (Docker dev: localstack:4566 inside, localhost:4566 outside).
+  // Only pre-signed URLs handed to clients use it. Empty everywhere else.
+  @IsString()
+  @IsOptional()
+  S3_PUBLIC_ENDPOINT: string = "";
+
   // Phase 10: payments (docs/09-SECURITY.md SEC-PAY-*). All optional: an
   // unconfigured provider makes checkout return 503 and its webhook fail
   // closed (400). SEC-PAY-004 "test mode only" is enforced here, not just

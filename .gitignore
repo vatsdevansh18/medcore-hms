@@ -39,3 +39,6 @@ apps/backend/prisma/generated/
 # Misc
 *.local
 .turbo/
+
+# Playwright (Phase 12)
+apps/frontend/e2e/.fixture.json

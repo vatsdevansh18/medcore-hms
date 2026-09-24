@@ -1,25 +1,163 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens (docs/04-UI-UX.md §2.1-2.3). Components use these through
+ * Tailwind utilities (bg-surface, text-muted, border-border, text-primary...),
+ * never raw hex values. Every token has a dark pair; dark mode follows the OS
+ * unless the user picks one explicitly (html[data-theme]).
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --primary: #0a2a5e;
+  --primary-hover: #123a7a;
+  --primary-foreground: #ffffff;
+  --primary-surface: #e3f0fc;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --surface-muted: #f1f3f6;
+  --border: #dde1e7;
+  --border-strong: #c4cad3;
+  --foreground: #111827;
+  --muted: #4b5563;
+  --subtle: #6b7280;
+
+  --success: #1b7f4c;
+  --success-surface: #e7f5ee;
+  --warning: #b45309;
+  --warning-surface: #fdf3e6;
+  --danger: #b91c1c;
+  --danger-surface: #fdecec;
+  --info: #1d4ed8;
+  --info-surface: #e8effd;
+
+  --focus-ring: #2f6fe0;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --primary: #5b8def;
+    --primary-hover: #7aa3f3;
+    --primary-foreground: #0b1220;
+    --primary-surface: #132a4d;
+
+    --background: #0b1018;
+    --surface: #121925;
+    --surface-muted: #182131;
+    --border: #263145;
+    --border-strong: #34425c;
+    --foreground: #e6eaf2;
+    --muted: #a8b3c5;
+    --subtle: #8391a7;
+
+    --success: #4ade80;
+    --success-surface: #10281c;
+    --warning: #fbbf24;
+    --warning-surface: #2b2110;
+    --danger: #f87171;
+    --danger-surface: #2d1415;
+    --info: #60a5fa;
+    --info-surface: #122239;
+
+    --focus-ring: #7aa3f3;
+    color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --primary: #5b8def;
+  --primary-hover: #7aa3f3;
+  --primary-foreground: #0b1220;
+  --primary-surface: #132a4d;
+
+  --background: #0b1018;
+  --surface: #121925;
+  --surface-muted: #182131;
+  --border: #263145;
+  --border-strong: #34425c;
+  --foreground: #e6eaf2;
+  --muted: #a8b3c5;
+  --subtle: #8391a7;
+
+  --success: #4ade80;
+  --success-surface: #10281c;
+  --warning: #fbbf24;
+  --warning-surface: #2b2110;
+  --danger: #f87171;
+  --danger-surface: #2d1415;
+  --info: #60a5fa;
+  --info-surface: #122239;
+
+  --focus-ring: #7aa3f3;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-surface: var(--primary-surface);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --color-focus: var(--focus-ring);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* §2.2 type scale: dense UI steps plus two larger steps. */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+}
+
+html {
+  font-size: 14px;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+}
+
+/* §3: a visible focus ring on every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
 }

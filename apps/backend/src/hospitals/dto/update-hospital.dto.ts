@@ -1,6 +1,10 @@
 import {
+  IsBoolean,
   IsEmail,
+  IsInt,
   IsOptional,
+  Max,
+  Min,
   IsPhoneNumber,
   IsString,
   MaxLength,
@@ -28,4 +32,15 @@ export class UpdateHospitalDto {
   @IsOptional()
   @IsIanaTimezone()
   timezone?: string;
+
+  /** FR-PORTAL-002 reschedule policy (docs/11-DECISIONS.md D-035). */
+  @IsOptional()
+  @IsBoolean()
+  patientRescheduleAllowed?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(720)
+  patientRescheduleCutoffHours?: number;
 }

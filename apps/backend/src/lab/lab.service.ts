@@ -25,6 +25,9 @@ import type { CreateLabOrderDto } from "./dto/create-lab-order.dto";
 import type { UpdateLabOrderItemStatusDto } from "./dto/update-lab-order-item-status.dto";
 import type { EnterLabResultDto } from "./dto/enter-lab-result.dto";
 import type { ApproveLabResultDto } from "./dto/approve-lab-result.dto";
+import { PaginationQueryDto } from "../common/pagination/pagination-query.dto";
+import { PaginatedResult } from "../common/pagination/paginated-result";
+import { DOCTOR_NAME_SELECT } from "../prescriptions/prescription-view";
 
 interface StoredLabValue {
   parameter: string;
@@ -34,7 +37,14 @@ interface StoredLabValue {
 }
 
 const LAB_ORDER_INCLUDE = {
-  doctor: { include: { user: { select: SAFE_USER_SELECT } } },
+  doctor: {
+    select: {
+      id: true,
+      userId: true,
+      specialization: true,
+      user: { select: { id: true, firstName: true, lastName: true } },
+    },
+  },
   patient: { include: { user: { select: SAFE_USER_SELECT } } },
   items: { include: { labTest: { include: { referenceRanges: true } }, result: true } },
 } as const;
@@ -360,6 +370,43 @@ export class LabService {
       relatedEntityType: "LabOrder",
       relatedEntityId: order.id,
       dedupeKey: `${NotificationType.LAB_RESULT_APPROVED}:${itemId}`,
+    });
+  }
+
+  /**
+   * FR-PORTAL-001: the calling patient's own lab orders, newest first. A
+   * summary only (item status and test name); results are read through
+   * `GET /lab-orders/:id`, which applies the D-021 visibility rule.
+   * Patient-only for now; the lab work queue is Phase 13 (D-035).
+   */
+  async findMine(query: PaginationQueryDto, caller: AuthenticatedUser) {
+    if (caller.role !== UserRole.PATIENT || !caller.hospitalId) {
+      return PaginatedResult.of([], 0, query.page, query.limit);
+    }
+    return TenantContext.run({ hospitalId: caller.hospitalId, userId: caller.sub, bypassTenancy: false }, async () => {
+      const patient = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
+      if (!patient) return PaginatedResult.of([], 0, query.page, query.limit);
+      const where = { patientId: patient.id };
+      const [data, total] = await Promise.all([
+        this.prisma.labOrder.findMany({
+          where,
+          orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+          skip: query.skip,
+          take: query.limit,
+          select: {
+            id: true,
+            priority: true,
+            createdAt: true,
+            doctor: DOCTOR_NAME_SELECT,
+            items: {
+              orderBy: { id: "asc" },
+              select: { id: true, status: true, labTest: { select: { id: true, name: true } } },
+            },
+          },
+        }),
+        this.prisma.labOrder.count({ where }),
+      ]);
+      return PaginatedResult.of(data, total, query.page, query.limit);
     });
   }
 

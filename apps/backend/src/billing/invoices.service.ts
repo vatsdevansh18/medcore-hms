@@ -186,9 +186,13 @@ export class InvoicesService {
       if (!invoice) throw new NotFoundException("Invoice not found.");
       if (caller.role === UserRole.PATIENT) {
         // docs/07-RBAC-MATRIX.md §3.8 "self only": another patient's
-        // invoice is indistinguishable from a missing one.
+        // invoice is indistinguishable from a missing one. A DRAFT is still
+        // being assembled by staff and isn't shared with the patient until
+        // it's finalized (brief §7.7, docs/11-DECISIONS.md D-035).
         const own = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
-        if (!own || own.id !== invoice.patientId) throw new NotFoundException("Invoice not found.");
+        if (!own || own.id !== invoice.patientId || invoice.status === InvoiceStatus.DRAFT) {
+          throw new NotFoundException("Invoice not found.");
+        }
       }
       return this.view(this.prisma, invoiceId);
     });
@@ -196,6 +200,7 @@ export class InvoicesService {
 
   async findAll(query: FindInvoicesQueryDto, caller: AuthenticatedUser) {
     const hospitalId = this.requireHospitalId(caller);
+    if (caller.role === UserRole.PATIENT) return this.findMine(query, caller, hospitalId);
     return this.scoped(caller, hospitalId, async () => {
       const where = {
         ...(query.status ? { status: query.status } : {}),
@@ -208,6 +213,43 @@ export class InvoicesService {
           orderBy: [{ createdAt: "desc" }, { id: "asc" }],
           skip: query.skip,
           take: query.limit,
+        }),
+        this.prisma.invoice.count({ where }),
+      ]);
+      return PaginatedResult.of(data, total, query.page, query.limit);
+    });
+  }
+
+  /**
+   * FR-PORTAL-001: a patient's own invoices, never DRAFTs (D-035). A
+   * `patientId` filter can't widen this: the patient is always the caller.
+   */
+  private findMine(query: FindInvoicesQueryDto, caller: AuthenticatedUser, hospitalId: string) {
+    return this.scoped(caller, hospitalId, async () => {
+      const own = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
+      if (!own || query.status === InvoiceStatus.DRAFT) {
+        return PaginatedResult.of([], 0, query.page, query.limit);
+      }
+      const where = {
+        patientId: own.id,
+        status: query.status ?? { not: InvoiceStatus.DRAFT },
+        ...(query.appointmentId ? { appointmentId: query.appointmentId } : {}),
+      };
+      const [data, total] = await Promise.all([
+        this.prisma.invoice.findMany({
+          where,
+          orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+          skip: query.skip,
+          take: query.limit,
+          select: {
+            id: true,
+            appointmentId: true,
+            status: true,
+            total: true,
+            currency: true,
+            finalizedAt: true,
+            createdAt: true,
+          },
         }),
         this.prisma.invoice.count({ where }),
       ]);

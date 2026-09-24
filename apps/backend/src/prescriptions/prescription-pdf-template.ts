@@ -1,3 +1,5 @@
+import { escapeHtml } from "../common/pdf/pdf-renderer.service";
+
 export interface PrescriptionPdfItem {
   medicineName: string;
   dosage: string;
@@ -22,13 +24,6 @@ export interface PrescriptionPdfData {
   supersedesId: string | null;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 /** Renders the letterhead + item table + signature overlay HTML that
  * `PrescriptionPdfProcessor` feeds to Puppeteer (FR-RX-003). Kept as plain

@@ -6,6 +6,7 @@ import {
   MedicineBatchStatus,
   PrescriptionStatus,
 } from "@medcore/types";
+import { toPrescriptionView } from "../prescriptions/prescription-view";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
@@ -230,12 +231,13 @@ export class DispensingService {
     // Any low-stock alert raised above is committed now.
     this.notifications.publish();
 
-    return TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
+    const dispensed = await TenantContext.run({ hospitalId, userId: caller.sub, bypassTenancy: false }, () =>
       this.prisma.prescription.findUniqueOrThrow({
         where: { id: prescriptionId },
         include: DISPENSED_PRESCRIPTION_INCLUDE,
       }),
     );
+    return toPrescriptionView(dispensed);
   }
 
   private isEligible(batch: BatchRow, today: Date): boolean {

@@ -59,6 +59,8 @@ erDiagram
         uuid addressId FK
         string contactEmail
         string timezone
+        bool patientRescheduleAllowed
+        int patientRescheduleCutoffHours
         timestamptz createdAt
     }
     USER {
@@ -358,6 +360,11 @@ erDiagram
 - `Notification` is the transactional outbox. `dispatchedAt` is null until the dispatcher has enqueued its per-channel jobs, and `dedupeKey` (unique) makes a repeated trigger a no-op. Rows written before the migration are marked dispatched so they're never sent retroactively.
 - Indexes: `(recipientUserId, createdAt)` serves `GET /notifications/me`; `(dispatchedAt, createdAt)` serves the outbox drain and sweep.
 - `NotificationDeliveryLog` records one row per delivery attempt (`attempt`, `providerMessageId`), with the new `SKIPPED` status. Its FK to `Notification` is now `ON DELETE CASCADE`, since a log has no meaning without its notification.
+
+**As implemented in Phase 12** (migration `20260926090000_patient_portal`, `11-DECISIONS.md` D-035/D-036/D-037):
+- `Hospital.patientRescheduleAllowed` (default true) and `patientRescheduleCutoffHours` (default 24, `CHECK >= 0`) are the FR-PORTAL-002 reschedule policy.
+- `Payment.receiptUrl` holds the S3 key of the receipt PDF once it has been rendered (first request); it's never returned by the API.
+- `Hospital.timezone` now drives scheduling: `DoctorAvailability` and exception times are local wall-clock times in that zone, and `Appointment` times stay UTC instants.
 
 ## 4. Key Design Decisions
 

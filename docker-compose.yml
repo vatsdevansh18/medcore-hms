@@ -62,6 +62,9 @@ services:
       # Container-network hostname, not localhost:4566 — .env's value (for the
       # native dev path) is overridden here the same way DATABASE_URL/REDIS_URL are.
       S3_ENDPOINT: http://localstack:4566
+      # Pre-signed URLs go to the browser on the host, which reaches
+      # LocalStack at localhost, not by its container name (Phase 12).
+      S3_PUBLIC_ENDPOINT: http://localhost:4566
     ports:
       - "3001:3001"
     depends_on:

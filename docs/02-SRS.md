@@ -125,6 +125,8 @@ Each FR/NFR below states **Requirement**, **Rationale** (why, tied to the brief 
 - **FR-PORTAL-002** — A patient can book, reschedule (if the hospital's policy allows), or cancel their own appointments, subject to the same conflict rules as staff-initiated booking.
 - **FR-PORTAL-003** — A patient can pay a `FINALIZED` invoice through the integrated payment flow.
 
+Phase 12 interpretation (`11-DECISIONS.md` D-035): "the hospital's policy" is `Hospital.patientRescheduleAllowed` plus a cutoff before the appointment; a patient cancels only a still-PENDING request (`07-RBAC-MATRIX.md` §3.3), and a confirmed appointment is cancelled through the front desk. "Invoices" means finalized ones; a DRAFT is not shared with the patient. Payment history includes a downloadable receipt PDF per successful payment.
+
 ### 2.12 Analytics, Dashboards & Search (`FR-ANALYTICS`, `FR-SEARCH`)
 
 - **FR-ANALYTICS-001** — Each role's dashboard surfaces the KPIs and widgets specified in `04-UI-UX.md` §Dashboard Patterns, computed from that role's own hospital scope (or platform-wide only for Super Admin).

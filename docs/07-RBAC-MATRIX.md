@@ -50,6 +50,7 @@ All roles except `SUPER_ADMIN` are scoped to exactly one `hospitalId`, resolved 
 | Set/update own availability            | ⛔     | ⛔                              | ✅ self             | ⛔               | ⛔                      | ⛔  | ⛔  | ⛔  | ⛔                          |
 | View doctor availability (for booking) | ⛔     | ✅ own hospital                 | ✅ self             | ✅ own hospital  | ✅ own hospital         | ⛔  | ⛔  | ⛔  | ✅ own hospital             |
 | Book appointment                       | ⛔     | ⛔                              | ⛔                  | ⛔               | ✅ on behalf of patient | ⛔  | ⛔  | ⛔  | ✅ self                     |
+| Reschedule own appointment (Phase 12)  | ⛔     | ⛔                              | ⛔                  | ⛔               | ⛔                      | ⛔  | ⛔  | ⛔  | 🟡 own, PENDING/CONFIRMED, if hospital policy allows |
 | Update appointment status              | ⛔     | 🟡 own hospital, admin override | ✅ own appointments | 🟡 check-in only | ✅ own hospital         | ⛔  | ⛔  | ⛔  | 🟡 cancel own, pending only |
 | View appointment list                  | 🟡 any | ✅ own                          | ✅ own only         | ✅ own hospital  | ✅ own hospital         | ⛔  | ⛔  | ⛔  | ✅ self only                |
 | Create emergency appointment           | ⛔     | ⛔                              | ✅                  | ⛔               | ✅                      | ⛔  | ⛔  | ⛔  | ⛔                          |
@@ -101,6 +102,7 @@ Receptionist, Lab Technician, Pharmacist, and Accountant have **no** direct read
 | Create/add draft invoice items         | ⛔                                                                  | ⛔                    | ⛔  | ⛔  | ✅ own hospital | ⛔  | ⛔  | ✅ own hospital        | ⛔           |
 | Finalise invoice                       | ⛔                                                                  | ⛔                    | ⛔  | ⛔  | ✅ own hospital | ⛔  | ⛔  | ✅ own hospital        | ⛔           |
 | View invoice                           | ⛔                                                                  | 🟡 own hospital       | ⛔  | ⛔  | ✅ own hospital | ⛔  | ⛔  | ✅ own hospital        | ✅ self only |
+| Download payment receipt (Phase 12)    | ⛔                                                                  | 🟡 own hospital       | ⛔  | ⛔  | ✅ own hospital | ⛔  | ⛔  | ✅ own hospital        | ✅ self only |
 | Initiate payment                       | ⛔                                                                  | ⛔                    | ⛔  | ⛔  | 🟡 cash only    | ⛔  | ⛔  | 🟡 cash/reconciliation | ✅ self only |
 | Handle payment webhook                 | System-only endpoint, signature-authenticated, no user role applies |                       |     |     |                 |     |     |                        |              |
 | Reconcile payments / financial reports | ⛔                                                                  | 🟡 own hospital, read | ⛔  | ⛔  | ⛔              | ⛔  | ⛔  | ✅ own hospital        | ⛔           |
@@ -114,6 +116,8 @@ Receptionist, Lab Technician, Pharmacist, and Accountant have **no** direct read
 | View platform-wide audit log | ✅     | ⛔     | ⛔  | ⛔  | ⛔  | ⛔  | ⛔  | ⛔  | ⛔  |
 
 ## 4. Notes on 🟡 Scoping
+
+- Phase 12 (`11-DECISIONS.md` D-035): a Patient's "View invoice" covers finalized invoices only; a DRAFT is not yet shared and is 404 to its own patient. "View prescription" and "View result" for a Patient include list endpoints (`GET /prescriptions`, `GET /lab-orders`) scoped to the caller. The reschedule row's policy is `Hospital.patientRescheduleAllowed` plus a cutoff (`patientRescheduleCutoffHours` before the current start); emergency appointments can't be rescheduled.
 
 - "own hospital" means the guard additionally verifies `resource.hospitalId === caller.hospitalId`, sourced from the JWT — never trusts a `hospitalId` in the request body/query.
 - "self only" (Patient) means the guard verifies `resource.patientId === caller.patientProfileId`.

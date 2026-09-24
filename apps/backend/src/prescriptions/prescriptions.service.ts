@@ -9,9 +9,13 @@ import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.in
 import { PrescriptionPdfQueueService } from "../queue/prescription-pdf-queue.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import type { CreatePrescriptionDto } from "./dto/create-prescription.dto";
+import type { FindPrescriptionsQueryDto } from "./dto/find-prescriptions-query.dto";
+import { PaginatedResult } from "../common/pagination/paginated-result";
+import { DOCTOR_NAME_SELECT, toPrescriptionView } from "./prescription-view";
 
 const PRESCRIPTION_INCLUDE = {
   items: { include: { medicine: true } },
+  doctor: DOCTOR_NAME_SELECT,
 } as const;
 
 /** docs/07-RBAC-MATRIX.md §3.5 "View prescription" row's NUR annotation
@@ -164,7 +168,7 @@ export class PrescriptionsService {
 
       this.notifications.publish();
       await this.pdfQueue.enqueue(created.id);
-      return created;
+      return toPrescriptionView(created);
     });
   }
 
@@ -197,7 +201,31 @@ export class PrescriptionsService {
 
   async findOne(id: string, caller: AuthenticatedUser) {
     if (!VIEW_ROLES.includes(caller.role)) throw new NotFoundException("Prescription not found.");
-    return this.getForView(id, caller);
+    return toPrescriptionView(await this.getForView(id, caller));
+  }
+
+  /** FR-PORTAL-001: the calling patient's own prescriptions, newest first.
+   * Patient-only for now; staff work queues are Phase 13 (D-035). */
+  async findMine(query: FindPrescriptionsQueryDto, caller: AuthenticatedUser) {
+    if (caller.role !== UserRole.PATIENT || !caller.hospitalId) {
+      return PaginatedResult.of([], 0, query.page, query.limit);
+    }
+    return TenantContext.run({ hospitalId: caller.hospitalId, userId: caller.sub, bypassTenancy: false }, async () => {
+      const patient = await this.prisma.patientProfile.findUnique({ where: { userId: caller.sub } });
+      if (!patient) return PaginatedResult.of([], 0, query.page, query.limit);
+      const where = { patientId: patient.id, ...(query.status ? { status: query.status } : {}) };
+      const [data, total] = await Promise.all([
+        this.prisma.prescription.findMany({
+          where,
+          orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+          skip: query.skip,
+          take: query.limit,
+          include: PRESCRIPTION_INCLUDE,
+        }),
+        this.prisma.prescription.count({ where }),
+      ]);
+      return PaginatedResult.of(data.map(toPrescriptionView), total, query.page, query.limit);
+    });
   }
 
   async getPdfDownloadUrl(id: string, caller: AuthenticatedUser) {

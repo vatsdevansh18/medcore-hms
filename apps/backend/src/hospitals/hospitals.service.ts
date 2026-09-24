@@ -82,6 +82,20 @@ export class HospitalsService {
     });
   }
 
+  /** ACTIVE hospitals only (a pending or suspended one can't take
+   * registrations), with no contact, status, or settings fields. */
+  async directory() {
+    const hospitals = await TenantContext.bypass(() =>
+      this.prisma.hospital.findMany({
+        where: { status: HospitalStatus.ACTIVE },
+        orderBy: { name: "asc" },
+        take: 200,
+        select: { id: true, name: true, slug: true, address: { select: { city: true } } },
+      }),
+    );
+    return hospitals.map((h) => ({ id: h.id, name: h.name, slug: h.slug, city: h.address?.city ?? null }));
+  }
+
   async findOne(id: string, caller: AuthenticatedUser) {
     this.assertCanAccess(caller, id);
     const hospital = await TenantContext.bypass(() =>

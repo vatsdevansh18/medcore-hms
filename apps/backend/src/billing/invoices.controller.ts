@@ -13,8 +13,9 @@ import { FindInvoicesQueryDto } from "./dto/find-invoices-query.dto";
 
 /** docs/07-RBAC-MATRIX.md §3.8. Hospital Admin's 🟡 is read-only. */
 const BILLING_STAFF: UserRole[] = [UserRole.RECEPTIONIST, UserRole.ACCOUNTANT];
-const INVOICE_LIST_ROLES: UserRole[] = [...BILLING_STAFF, UserRole.HOSPITAL_ADMIN];
-const INVOICE_VIEW_ROLES: UserRole[] = [...INVOICE_LIST_ROLES, UserRole.PATIENT];
+const INVOICE_STAFF_VIEW_ROLES: UserRole[] = [...BILLING_STAFF, UserRole.HOSPITAL_ADMIN];
+/** Patients list and view their own non-DRAFT invoices (FR-PORTAL-001, D-035). */
+const INVOICE_VIEW_ROLES: UserRole[] = [...INVOICE_STAFF_VIEW_ROLES, UserRole.PATIENT];
 
 @Controller("invoices")
 export class InvoicesController {
@@ -29,7 +30,7 @@ export class InvoicesController {
     return this.invoicesService.create(dto, user);
   }
 
-  @Roles(...INVOICE_LIST_ROLES)
+  @Roles(...INVOICE_VIEW_ROLES)
   @Get()
   findAll(@Query() query: FindInvoicesQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.invoicesService.findAll(query, user);

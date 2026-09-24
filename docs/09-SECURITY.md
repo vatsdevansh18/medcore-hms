@@ -31,6 +31,7 @@
 - **SEC-AUTHN-005** — OTPs (email/phone) are 6 digits, rate-limited (max 5 attempts per OTP, max 3 OTP requests per 10 minutes per account), and single-use with a 10-minute TTL.
 - **SEC-AUTHN-006** — `forgot-password` never reveals whether an email exists (uniform 200 response and timing-insensitive-enough behaviour) — prevents user enumeration.
 - **SEC-AUTHN-007** — Login failures are rate-limited (100 req/15 min per IP, per the brief) and do not distinguish "wrong password" from "unknown email" in the response body.
+- **SEC-AUTHN-008** (Phase 12) — The web app keeps the access token in memory only (never `localStorage`/`sessionStorage`) and restores a session through the `httpOnly` refresh cookie. It refreshes one request at a time (shared in a tab, serialised across tabs with a Web Lock), so the client never presents a rotated refresh token twice and trips SEC-AUTHN-004's family revocation on its own (`11-DECISIONS.md` D-038).
 
 ## 4. Authorization (`SEC-AUTHZ`)
 
@@ -50,6 +51,7 @@
 - **SEC-DATA-003** — A log-sanitising interceptor strips `password`, `passwordHash`, `token`, `refreshToken`, `otp`, `cvv`, `cardNumber`, `providerSecret`, and any field matching a configurable deny-list, from every log line, error report, and Sentry breadcrumb, before it leaves the process.
 - **SEC-DATA-004** — API error responses never include stack traces, ORM error text, or internal file paths — only the standard `{code, message}` shape.
 - **SEC-DATA-005** — Secrets (DB credentials, JWT secret, provider API keys) are never committed; `.env` is git-ignored from the first commit, `.env.example` documents every variable with a placeholder, and production secrets are injected via the deployment environment, not baked into images.
+- **SEC-DATA-006** (Phase 12) — Responses carry what their reader needs, not whole rows: a patient receives a doctor's name and specialization, never their email or phone, and never a DRAFT invoice. Explicit field lists (`packages/types` view types) are used for patient-facing lists (`11-DECISIONS.md` D-035/D-036).
 
 ## 7. Input Validation & Injection Prevention (`SEC-INPUT`)
 
@@ -77,6 +79,7 @@
 - **SEC-FILE-002** — Size capped at 20 MB per EMR attachment, per the brief; smaller caps apply to profile images.
 - **SEC-FILE-003** — Files are stored in a private S3 bucket; access is via short-lived pre-signed URLs generated per request, never a public bucket policy.
 - **SEC-FILE-004** — A ClamAV scan step is documented as the production-hardening target for Phase 15/16; if infrastructure constraints prevent standing up ClamAV within the project timeline, this is logged as a documented, accepted risk in that phase's review — not silently dropped.
+- **SEC-FILE-005** (Phase 12) — S3 storage keys never appear in an API response (doctor signatures, prescription PDFs, EMR attachments, lab report files, receipts); clients reach files only through per-request pre-signed URLs. URLs for clients are signed for the address the client uses (`S3_PUBLIC_ENDPOINT` when it differs from the API's own `S3_ENDPOINT`, as in Docker dev); URLs fetched by the server itself are signed for the internal address and never returned (`11-DECISIONS.md` D-036).
 
 ## 11. Payment Security (`SEC-PAY`)
 

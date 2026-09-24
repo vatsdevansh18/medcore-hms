@@ -8,6 +8,7 @@ import { BookAppointmentDto } from "./dto/book-appointment.dto";
 import { CreateEmergencyAppointmentDto } from "./dto/create-emergency-appointment.dto";
 import { UpdateAppointmentStatusDto } from "./dto/update-appointment-status.dto";
 import { FindAppointmentsQueryDto } from "./dto/find-appointments-query.dto";
+import { RescheduleAppointmentDto } from "./dto/reschedule-appointment.dto";
 
 /** docs/07-RBAC-MATRIX.md §3.3 — "View appointment list"/"View a specific
  * appointment": SUPER_ADMIN (any, read-only), HOSPITAL_ADMIN/NURSE/
@@ -64,6 +65,17 @@ export class AppointmentsController {
   @Get(":id")
   findOne(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.appointmentsService.findOne(id, user);
+  }
+
+  /** FR-PORTAL-002, docs/11-DECISIONS.md D-035: patient self only. */
+  @Roles(UserRole.PATIENT)
+  @Patch(":id/reschedule")
+  reschedule(
+    @Param("id") id: string,
+    @Body() dto: RescheduleAppointmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.appointmentsService.reschedule(id, dto, user);
   }
 
   @Roles(...APPOINTMENT_STATUS_ROLES)

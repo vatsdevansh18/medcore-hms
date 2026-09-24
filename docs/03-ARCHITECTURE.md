@@ -69,6 +69,13 @@ Next.js 15 App Router with a strict split between Server Components (data-heavy,
 
 Folder structure and component strategy are detailed in `04-UI-UX.md`.
 
+**As implemented in Phase 12** (the patient portal, `11-DECISIONS.md` D-038):
+- Folders follow the brief: `app/(auth)` (login, register, verify-email, forgot/reset password), `app/(portal)/portal/*`, `app/(dashboard)/staff` (a plain notice until Phase 13), `components/ui` (shadcn-style Radix primitives), `components/shared` (StatusBadge, EmptyState/ErrorState/ListSkeleton, PageHeader, ConfirmDialog, Pagination, FormField, Toaster, DownloadButton, StepIndicator), `components/modules` (SlotPicker, AppointmentCard, NotificationPanel, auth forms), `hooks` (`useAuth`, `useRealtime`, `useHospital`, `useDebounce`), `services` (API calls and TanStack Query hooks), `store` (`authStore`, `notificationStore`, `uiStore`), `lib`, `constants`.
+- Portal pages are Client Components: every portal read needs the in-memory access token, which a Server Component can't see. Server Components would need the token in a cookie readable by the Next server, which D-038 rejects.
+- `lib/api-client.ts` unwraps the envelopes, maps error codes, and refreshes once on a 401 (single-flight in a tab, Web Lock across tabs). The browser calls the API origin directly with credentials.
+- `useRealtime` connects to `/notifications` with the current token on every (re)connect and invalidates the affected queries when a notification arrives.
+- All times are shown in the hospital's timezone (from `/auth/me`), whatever the device's zone (D-037).
+
 ## 3. Backend Architecture
 
 NestJS organised as one feature module per bounded context, each independently testable with no circular imports:
@@ -254,7 +261,9 @@ Idempotency is enforced by a unique constraint on `Payment.providerEventId`; a r
 
 ## 10. Storage & File Architecture
 
-All uploads (EMR attachments, lab report PDFs, prescription PDFs, doctor signatures) go to a private S3 bucket. The API never proxies file bytes for large files — it issues short-lived pre-signed PUT URLs for upload and pre-signed GET URLs for download, after validating MIME type, extension, and size server-side on the initiating request. Nothing is public-read by default. Cloudinary is used only for optional profile-photo transformation, not as the system of record for clinical documents.
+All uploads (EMR attachments, lab report PDFs, prescription PDFs, receipts, doctor signatures) go to a private S3 bucket. The API never proxies file bytes for large files — it issues short-lived pre-signed PUT URLs for upload and pre-signed GET URLs for download, after validating MIME type, extension, and size server-side on the initiating request. Nothing is public-read by default. Cloudinary is used only for optional profile-photo transformation, not as the system of record for clinical documents.
+
+Since Phase 12 (`11-DECISIONS.md` D-036): no response contains a storage key. A URL for a client is signed for the address the client uses (`S3_PUBLIC_ENDPOINT` when set, as in Docker dev, where the API reaches LocalStack as `localstack:4566` but the browser needs `localhost:4566`), and a URL the server fetches itself (a signature image inside PDF rendering) is signed for the internal address. Receipt PDFs are rendered on first request by the shared `PdfRendererService` and cached.
 
 ## 11. Deployment Architecture
 

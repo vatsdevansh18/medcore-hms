@@ -321,7 +321,7 @@ Read endpoints (`GET /medicines/low-stock`) never touch the latch. A newly creat
 
 **Rationale:** Expiry is a calendar-date concept, so comparing it against the UTC date would be off by a day for part of every day in any non-UTC hospital. The comparison is purely date-to-date, so using the real timezone here costs nothing extra, unlike the appointment module's time-of-day arithmetic.
 
-**Consequences:** Pharmacy is the first real consumer of `Hospital.timezone`. That exposed that the field was only `@IsString()`-validated since Phase 4, so an unknown zone would make every pharmacy date computation for that hospital throw. It's now validated as a real IANA zone (`IsIanaTimezone`, `src/common/validation/`) on hospital create and update, with a regression test in `test/directory.e2e-spec.ts`. The appointment module's UTC simplification is unchanged and still needs its own entry if it's kept.
+**Consequences:** Pharmacy is the first real consumer of `Hospital.timezone`. That exposed that the field was only `@IsString()`-validated since Phase 4, so an unknown zone would make every pharmacy date computation for that hospital throw. It's now validated as a real IANA zone (`IsIanaTimezone`, `src/common/validation/`) on hospital create and update, with a regression test in `test/directory.e2e-spec.ts`. The appointment module's UTC simplification is unchanged and still needs its own entry if it's kept. **Update (Phase 12):** it wasn't kept; scheduling now uses the hospital timezone (D-037).
 
 ---
 
@@ -428,7 +428,7 @@ Read endpoints (`GET /medicines/low-stock`) never touch the latch. A newly creat
 - **All provider settings are optional.** An unconfigured provider makes checkout return `503 PAYMENT_PROVIDER_UNAVAILABLE` (new error code), and its webhook fail closed with `400 WEBHOOK_SIGNATURE_INVALID`.
 - **The outbound half is its own injectable (`CheckoutClient`).** It creates the Stripe Checkout Session or Razorpay order. The e2e suite replaces *only* this network hop. Signature verification (`PaymentWebhookVerifier`) always runs through the real `stripe.webhooks.constructEvent` and `Razorpay.validateWebhookSignature` against real signatures, including inside the Docker image.
 
-**Consequences:** The real `CheckoutClient` calls (`stripe.checkout.sessions.create`, `razorpay.orders.create`) have **not been executed against the providers' test APIs** and are recorded as UNVERIFIED until test keys are supplied. Everything downstream of them (PENDING payment, webhook verification, settlement, idempotency) is verified. Receipts: the payment record (`paymentId` is the receipt reference) plus a `PAYMENT_RECEIVED` `Notification` row to the patient (D-020 scoping; dispatch is Phase 11). A downloadable receipt PDF is deferred to the Phase 12 portal.
+**Consequences:** The real `CheckoutClient` calls (`stripe.checkout.sessions.create`, `razorpay.orders.create`) have **not been executed against the providers' test APIs** and are recorded as UNVERIFIED until test keys are supplied. Everything downstream of them (PENDING payment, webhook verification, settlement, idempotency) is verified. Receipts: the payment record (`paymentId` is the receipt reference) plus a `PAYMENT_RECEIVED` `Notification` row to the patient (D-020 scoping; dispatch is Phase 11). A downloadable receipt PDF is deferred to the Phase 12 portal. **Update (Phase 12):** built as `GET /payments/:id/receipt` (D-036).
 
 ---
 
@@ -497,3 +497,63 @@ Two Phase 9/10 channel choices change to match the brief:
 **Decision:** `test/jest-e2e.json` sets `"maxWorkers": 1`. The full suite still takes about 40s.
 
 **Rejected:** per-spec BullMQ prefixes. They isolate the queues, but not the shared outbox table that every dispatcher drains.
+
+---
+
+## D-035 — Patient portal API scope and self-service reschedule (Phase 12)
+
+**Context:** FR-PORTAL-001..003 need the patient to see lists of their own prescriptions, lab orders, and invoices, but Phases 7-10 built those as single-item reads (`GET /prescriptions/:id`, `GET /lab-orders/:id`) or staff work queues (`GET /invoices`). FR-PORTAL-002 allows rescheduling "if the hospital's policy allows", and no such policy existed. The brief (§7.7) has the invoice "finalised ... and shared with the patient", which says nothing about drafts.
+
+**Decision:**
+- **Patient-only list endpoints.** `GET /prescriptions` and `GET /lab-orders` are PATIENT-only and always scoped to the caller's own `PatientProfile`. The lab list is a summary (item status and test name, never a result); results are read through `GET /lab-orders/:id`, which keeps the D-021 visibility rule in one place. Staff work queues for these are Phase 13 dashboards.
+- **`GET /invoices` also serves patients**, forced to their own invoices. A `patientId` filter can't widen it (it's ignored for a patient).
+- **A patient never sees a DRAFT invoice**, in the list or by id (404). A draft is still being assembled, and it's "shared" at finalization.
+- **Reschedule is `PATCH /appointments/:id/reschedule`**, PATIENT (self) only, gated by two new hospital settings: `Hospital.patientRescheduleAllowed` (default true) and `patientRescheduleCutoffHours` (default 24, 0-720, DB check ≥ 0), editable through `PATCH /hospitals/:id`. Allowed from PENDING or CONFIRMED, never for EMERGENCY appointments. The new window must be an open slot for the same doctor. The appointment keeps its id and goes back to PENDING (staff confirm the new time, which schedules fresh reminders), and its old reminders are cancelled. The move is a single conditional `UPDATE` on (id, status, old start): the exclusion constraints decide a race for the new slot (409 `SLOT_UNAVAILABLE`), and a concurrent change or second reschedule gets 409. Refusals by policy, cutoff, or type use the new 422 `RESCHEDULE_NOT_ALLOWED`.
+- **Patient cancellation is unchanged:** PENDING only (RBAC §3.3). A confirmed appointment is cancelled through the front desk.
+- **`GET /appointments?sortOrder=asc|desc`** (default desc) so the portal lists upcoming visits soonest first.
+- **`GET /auth/me` adds** `patientProfileId` (the EMR routes are keyed by it) and a `hospital` summary: name, timezone, and the reschedule policy.
+- **`GET /hospitals/directory` is public**: ACTIVE hospitals only, id/name/slug/city only. Patient self-registration (FR-AUTH-001) needs a hospital id, and there was no way for a signed-out visitor to find one. It's covered by the global rate limiter.
+
+**Rejected:** changing the appointment's id on reschedule (cancel + rebook). That loses the link between the old and new visit and re-runs the booking notification path. Also rejected: letting staff reschedule through the same endpoint this phase; a receptionist can already cancel and rebook, and the policy/cutoff rules are patient rules.
+
+---
+
+## D-036 — Response minimisation, and receipts rendered on demand (Phase 12)
+
+**Context:** Building the portal meant reading every response a patient receives. Three responses returned raw S3 storage keys: doctor profiles and appointments (`DoctorProfile.signatureImageUrl`), prescriptions (`pdfUrl`, `signatureImageUrl`), and EMR records (`Attachment.storageKey`). The bucket is private, so a key alone grants nothing, but the project's reading of SEC-FILE-003 (already applied to lab reports in Phase 8) is that only short-lived pre-signed URLs leave the server. Separately, every doctor projection used `SAFE_USER_SELECT`, which includes the doctor's email and phone, so any patient could list every doctor's contact details. The payment receipt PDF was deferred to this phase by D-030.
+
+**Decision:**
+- **Storage keys never leave the server.** Doctor views replace `signatureImageUrl` with `hasSignature`; prescription views (create, read, list, and the dispense response) replace `pdfUrl`/`signatureImageUrl` with `pdfReady`; EMR attachments drop `storageKey` on upload and read. Files are reached only through the existing pre-signed-URL endpoints.
+- **Patients get a doctor's name, not their contact details.** Appointment and lab-order responses (every role) carry a narrow doctor projection (id, specialization, name). The doctor directory keeps email and phone for staff callers but drops them for PATIENT callers.
+- **Receipts are rendered on first request and cached.** `GET /payments/:id/receipt` (the paying patient; Receptionist/Accountant/Hospital Admin in the same hospital) returns `{downloadUrl}` for a SUCCEEDED payment, 409 otherwise. The first call renders the PDF, stores it under a deterministic key, and records the key in the new `Payment.receiptUrl` (never returned); later calls reuse it. A concurrent first request writes the same object. Puppeteer rendering moved into a shared `PdfRendererService` used by both prescriptions and receipts.
+
+**Rejected:** rendering receipts in a job at settlement time. A lost job would leave a paid invoice without a receipt forever, and settlement happens in two places (cash and webhook) that would both need the hook. On-demand rendering has no such gap, and receipts are requested rarely.
+
+---
+
+## D-037 — Scheduling uses the hospital's timezone (Phase 12, fixes a Phase 5 simplification)
+
+**Context:** Since Phase 5 every wall-clock time was treated as UTC: a doctor available "09:00-13:00" at an Asia/Kolkata hospital got slots at 09:00 UTC, which is 14:30 local. The appointment module's comment pointed to a decision-log entry that was never written (noted in D-023). Nothing showed times to patients until the portal, where the error becomes visible: either a 14:30 slot for a 09:00 schedule, or the portal showing times in UTC.
+
+**Decision:** `DoctorAvailability` and exception start/end times are wall-clock times in `Hospital.timezone`; appointment instants stay UTC. `computeAvailability` treats `dateFrom`/`dateTo` and each `DaySlots.date` as hospital-local dates, converts each window with `zonedWallTimeToUtc` (`src/common/time/zoned-time.ts`, `Intl` only, two-pass so DST changes resolve), and reads booked appointments across the whole local range with a day of margin. Booking and reschedule look the requested slot up on the hospital-local date it starts on. The portal shows every time in the hospital's timezone, whatever the device's zone.
+
+**Consequences:** Existing appointments keep their instants. The appointments e2e spec pins its test hospital to `UTC` because its assertions are written in UTC wall time, and the portal spec covers Asia/Kolkata (09:00 IST = 03:30Z; the old UTC reading of 09:00 is rejected with 409). Receptionist booking gets the fix too; the staff UI that shows it is Phase 13.
+
+**Rejected:** a date library (Luxon, date-fns-tz). Two small `Intl`-based helpers cover the need without a new dependency.
+
+---
+
+## D-038 — Frontend session, API access, and portal shell (Phase 12)
+
+**Context:** Phase 12 is the first real frontend work. It fixes how the browser talks to the API and holds the session.
+
+**Decision:**
+- **The browser calls the API directly** (`NEXT_PUBLIC_API_BASE_URL`, CORS allow-list with credentials), not through a Next.js rewrite proxy. A proxy would make every request come from the Next server's address, collapsing the per-IP rate limiter (SEC-NET-003) into one bucket for all users. In development the two origins are same-site, so the `SameSite=Strict` refresh cookie (path `/api/auth`) is sent. Production puts both behind one domain (Phase 16 nginx), which keeps that true.
+- **The access token lives only in memory** (Zustand `authStore`), and a page load restores the session through `POST /auth/refresh`. On a 401 the client refreshes once and retries. There's one refresh at a time: concurrent 401s in a tab share a request, and tabs serialise through a Web Lock. Refresh tokens rotate, and a replayed one revokes every session (SEC-AUTHN-004), so two parallel refreshes with the same cookie would sign the user out everywhere.
+- **Route guarding is UX only.** The portal layout sends signed-out visitors to `/login?next=` (same-app paths only) and non-patients to `/staff`, which says plainly that staff dashboards are Phase 13 instead of showing a mock. Every API call is authorized server-side (FR-RBAC-002).
+- **Server state is TanStack Query** (no retry on a 4xx; polling only where the server is the source of truth: a prescription PDF being rendered, and an invoice after checkout until the webhook settles it). Client state is three small Zustand stores (`authStore`, `notificationStore`, `uiStore`), as the brief suggests.
+- **Payments:** Stripe redirects to the hosted page; Razorpay opens its hosted checkout script with the server-created order. The page never treats the provider's return as success. On return (`?checkout=processing`) it polls the invoice for up to 90s and says so if the webhook hasn't landed yet.
+- **Forms** validate on blur and on submit, then re-validate on change after a submit attempt. The line under each field is always reserved, so an error appearing on blur can't move the Submit button out from under a click in progress (found by the Playwright registration journey).
+- **UI primitives** follow shadcn/ui's structure (`components/ui`, Radix-based) but were written by hand, because the shadcn CLI is interactive. Nothing in `components/ui` is feature-specific.
+
+**Rejected:** storing the access token in `localStorage` (readable by any injected script), and a Next.js API proxy (above).

@@ -31,6 +31,14 @@ const RECORD_INCLUDE = {
 
 type MedicalRecordWithChildren = Prisma.MedicalRecordGetPayload<{ include: typeof RECORD_INCLUDE }>;
 
+/** An attachment as returned to a client: the S3 storage key never leaves
+ * the server; downloads go through a pre-signed URL (SEC-FILE-003,
+ * docs/11-DECISIONS.md D-036). */
+function toAttachmentView(attachment: MedicalRecordWithChildren["attachments"][number]) {
+  const { storageKey: _storageKey, ...rest } = attachment;
+  return rest;
+}
+
 @Injectable()
 export class MedicalRecordsService {
   constructor(
@@ -44,9 +52,10 @@ export class MedicalRecordsService {
    * ciphertext bytes — every response is decrypted (for an already
    * authorized caller) or omitted. */
   private toRecordResponse(record: MedicalRecordWithChildren) {
-    const { notesEncrypted, addenda, ...rest } = record;
+    const { notesEncrypted, addenda, attachments, ...rest } = record;
     return {
       ...rest,
+      attachments: attachments.map(toAttachmentView),
       notes: notesEncrypted ? this.encryption.decrypt(notesEncrypted) : null,
       addenda: addenda.map((a) => {
         const { noteEncrypted, ...addendumRest } = a;
@@ -302,7 +311,7 @@ export class MedicalRecordsService {
     );
 
     const uploadUrl = await this.s3.getUploadUrl(storageKey, dto.mimeType);
-    return { attachment, uploadUrl };
+    return { attachment: toAttachmentView(attachment), uploadUrl };
   }
 
   async getAttachmentDownloadUrl(recordId: string, attachmentId: string, caller: AuthenticatedUser) {

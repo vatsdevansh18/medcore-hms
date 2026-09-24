@@ -968,7 +968,11 @@ describe("Billing & Payments (e2e)", () => {
       for (const token of [doctorToken, nurseToken, labToken, pharmacistToken]) {
         await api().get(`/api/invoices/${invoiceId}`).set("Authorization", `Bearer ${token}`).expect(403);
       }
-      await api().get("/api/invoices").set("Authorization", `Bearer ${patientToken}`).expect(403);
+      // Phase 12 (D-035): a patient lists their own non-DRAFT invoices.
+      const mine = await api().get("/api/invoices").set("Authorization", `Bearer ${patientToken}`).expect(200);
+      expect(mine.body.data.map((row: { id: string }) => row.id)).toContain(invoiceId);
+      const theirs = await api().get("/api/invoices").set("Authorization", `Bearer ${otherPatientToken}`).expect(200);
+      expect(theirs.body.data.map((row: { id: string }) => row.id)).not.toContain(invoiceId);
       await api().get("/api/invoices").set("Authorization", `Bearer ${adminToken}`).expect(200);
     });
 

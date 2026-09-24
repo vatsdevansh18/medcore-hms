@@ -17,6 +17,25 @@ import type { CreateDoctorDto } from "./dto/create-doctor.dto";
 import type { UploadSignatureDto } from "./dto/upload-signature.dto";
 import { validateSignatureUpload } from "./signature-validation";
 
+/**
+ * A doctor profile as returned to a client (docs/11-DECISIONS.md D-036).
+ * `signatureImageUrl` is an S3 storage key, replaced by `hasSignature`. A
+ * PATIENT reading the directory to book gets the doctor's name only, not
+ * their email or phone: patients reach the hospital, not staff directly.
+ */
+function toDoctorView<T extends { signatureImageUrl: string | null; user: { email: string; phone: string | null } }>(
+  row: T,
+  callerRole: UserRole,
+) {
+  const { signatureImageUrl, user, ...rest } = row;
+  const { email: _email, phone: _phone, ...publicUser } = user;
+  return {
+    ...rest,
+    hasSignature: signatureImageUrl !== null,
+    user: callerRole === UserRole.PATIENT ? publicUser : user,
+  };
+}
+
 @Injectable()
 export class DoctorsService {
   constructor(
@@ -91,7 +110,7 @@ export class DoctorsService {
 
       await this.passwordResetService.requestReset(user.email);
 
-      return doctorProfile;
+      return toDoctorView(doctorProfile, caller.role);
     });
   }
 
@@ -124,7 +143,12 @@ export class DoctorsService {
         }),
         this.prisma.doctorProfile.count({ where }),
       ]);
-      return PaginatedResult.of(data, total, pagination.page, pagination.limit);
+      return PaginatedResult.of(
+        data.map((row) => toDoctorView(row, caller.role)),
+        total,
+        pagination.page,
+        pagination.limit,
+      );
     });
   }
 
@@ -139,7 +163,7 @@ export class DoctorsService {
         }),
     );
     if (!doctor) throw new NotFoundException("Doctor not found.");
-    return doctor;
+    return toDoctorView(doctor, caller.role);
   }
 
   /** FR-RX-003 — lets a doctor upload the signature image later overlaid on

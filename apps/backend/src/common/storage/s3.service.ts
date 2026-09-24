@@ -25,6 +25,9 @@ const PRESIGNED_URL_TTL_SECONDS = 300;
 export class S3Service implements OnModuleInit {
   private readonly logger = new Logger(S3Service.name);
   private readonly client: S3Client;
+  /** Signs URLs handed to browsers. Differs from `client` only when the
+   * browser reaches S3 at a different address than the API does. */
+  private readonly publicSigner: S3Client;
   private readonly bucket: string;
   private readonly usingLocalEndpoint: boolean;
 
@@ -32,7 +35,18 @@ export class S3Service implements OnModuleInit {
     const endpoint = this.config.get<string>("S3_ENDPOINT", "");
     this.usingLocalEndpoint = endpoint.length > 0;
     this.bucket = this.config.getOrThrow<string>("AWS_S3_BUCKET");
-    this.client = new S3Client({
+    this.client = this.createClient(endpoint);
+    // A pre-signed URL's signature covers its host, so a URL for a browser
+    // must be signed for the address the browser uses. In Docker dev the API
+    // reaches LocalStack as `localstack:4566`, which a browser on the host
+    // can't resolve; S3_PUBLIC_ENDPOINT (e.g. http://localhost:4566) fixes
+    // that. Unset everywhere else, including production.
+    const publicEndpoint = this.config.get<string>("S3_PUBLIC_ENDPOINT", "");
+    this.publicSigner = publicEndpoint ? this.createClient(publicEndpoint) : this.client;
+  }
+
+  private createClient(endpoint: string): S3Client {
+    return new S3Client({
       region: this.config.getOrThrow<string>("AWS_REGION"),
       credentials: {
         accessKeyId: this.config.getOrThrow<string>("AWS_ACCESS_KEY_ID"),
@@ -47,7 +61,7 @@ export class S3Service implements OnModuleInit {
       // requirement). "WHEN_REQUIRED" restores the pre-signed-URL-safe
       // default of only checksumming operations that mandate one.
       requestChecksumCalculation: "WHEN_REQUIRED",
-      ...(this.usingLocalEndpoint ? { endpoint, forcePathStyle: true } : {}),
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
     });
   }
 
@@ -70,12 +84,22 @@ export class S3Service implements OnModuleInit {
     return `hospitals/${hospitalId}/${scope}/${randomUUID()}-${sanitized}`;
   }
 
+  /** A pre-signed PUT for a client (browser) upload. */
   async getUploadUrl(key: string, mimeType: string): Promise<string> {
     const command = new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: mimeType });
-    return getSignedUrl(this.client, command, { expiresIn: PRESIGNED_URL_TTL_SECONDS });
+    return getSignedUrl(this.publicSigner, command, { expiresIn: PRESIGNED_URL_TTL_SECONDS });
   }
 
+  /** A pre-signed GET for a client (browser) download. */
   async getDownloadUrl(key: string): Promise<string> {
+    const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
+    return getSignedUrl(this.publicSigner, command, { expiresIn: PRESIGNED_URL_TTL_SECONDS });
+  }
+
+  /** A pre-signed GET fetched by the server itself (e.g. headless Chromium
+   * loading a signature image while rendering a PDF), signed for the
+   * address the API uses. Never hand this one to a client. */
+  async getInternalDownloadUrl(key: string): Promise<string> {
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
     return getSignedUrl(this.client, command, { expiresIn: PRESIGNED_URL_TTL_SECONDS });
   }

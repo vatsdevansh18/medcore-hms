@@ -14,6 +14,7 @@ import { UserRole } from "@medcore/types";
 import { Roles, ALL_ROLES } from "../auth/decorators/roles.decorator";
 import { BypassTenantScope } from "../auth/decorators/bypass-tenant-scope.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import { Public } from "../auth/decorators/public.decorator";
 import type { AuthenticatedUser } from "../auth/interfaces/authenticated-user.interface";
 import { PaginationQueryDto } from "../common/pagination/pagination-query.dto";
 import { HospitalsService } from "./hospitals.service";
@@ -50,6 +51,15 @@ export class HospitalsController {
   @Get()
   findAll(@Query() pagination: PaginationQueryDto) {
     return this.hospitalsService.findAll(pagination);
+  }
+
+  /** Public list of hospitals accepting patient registrations (the portal's
+   * sign-up form needs a hospital to register with; FR-AUTH-001). Names and
+   * cities only. Declared before `:id` so "directory" isn't read as an id. */
+  @Public()
+  @Get("directory")
+  directory() {
+    return this.hospitalsService.directory();
   }
 
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN)

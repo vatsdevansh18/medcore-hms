@@ -64,9 +64,10 @@ apps/backend/
   test/**/*.e2e-spec.ts     # integration tests (Supertest against Nest app instance)
 apps/frontend/
   src/**/*.test.tsx         # component tests (Vitest + Testing Library), colocated
-tests/
   e2e/**/*.spec.ts          # Playwright, cross-app critical journeys
 ```
+
+As built in Phase 12, the Playwright suite lives in `apps/frontend/e2e` (next to the app it drives and its `playwright.config.ts`) rather than a root `tests/` folder. It runs against a running stack (API on :3001, web on :3000, native or Docker). Global setup calls `apps/backend/scripts/e2e-portal-fixture.ts` to create two patients and a second lab technician, then builds the clinical history through the real API (encounter, vitals, prescription, lab result approved under four-eyes, finalized and part-paid invoice). Global teardown removes everything tied to that run. Journeys: sign-in redirect and return, wrong password, session survives reload, sign-out, staff redirect, registration to verification, records/vitals/allergies, prescription PDF download, lab result, receipt download, online payment unavailable (no provider keys), cancelled-checkout return, book → reschedule → cancel, live in-app notification over Socket.IO, cross-patient access denied in the UI and the API, and a phone-width pass with no horizontal scroll.
 
 ## 7. Exit Criteria for Phase 15 (Testing & Hardening)
 

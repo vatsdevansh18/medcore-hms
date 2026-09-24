@@ -1,12 +1,12 @@
 import { Inject, Logger } from "@nestjs/common";
 import { Processor, WorkerHost } from "@nestjs/bullmq";
 import type { Job } from "bullmq";
-import puppeteer from "puppeteer";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
 import { TenantContext } from "../common/tenancy/tenant-context";
 import { SAFE_USER_SELECT } from "../common/prisma/safe-user-select";
 import { S3Service } from "../common/storage/s3.service";
+import { PdfRendererService } from "../common/pdf/pdf-renderer.service";
 import { renderPrescriptionHtml } from "../prescriptions/prescription-pdf-template";
 import { PRESCRIPTION_PDF_QUEUE, type PrescriptionPdfJobData } from "./queue.constants";
 
@@ -26,6 +26,7 @@ export class PrescriptionPdfProcessor extends WorkerHost {
   constructor(
     @Inject(PRISMA_CLIENT) private readonly prisma: ExtendedPrismaClient,
     private readonly s3: S3Service,
+    private readonly pdf: PdfRendererService,
   ) {
     super();
   }
@@ -49,7 +50,7 @@ export class PrescriptionPdfProcessor extends WorkerHost {
     );
 
     const signatureUrl = prescription.signatureImageUrl
-      ? await this.s3.getDownloadUrl(prescription.signatureImageUrl)
+      ? await this.s3.getInternalDownloadUrl(prescription.signatureImageUrl)
       : null;
 
     const html = renderPrescriptionHtml({
@@ -74,18 +75,7 @@ export class PrescriptionPdfProcessor extends WorkerHost {
       supersedesId: prescription.supersedesId,
     });
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-    let pdfBuffer: Buffer;
-    try {
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "load" });
-      pdfBuffer = Buffer.from(await page.pdf({ format: "A4", printBackground: true }));
-    } finally {
-      await browser.close();
-    }
+    const pdfBuffer = await this.pdf.render(html);
 
     const storageKey = this.s3.buildKey(
       prescription.hospitalId,

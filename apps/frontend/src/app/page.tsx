@@ -1,10 +1,18 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { homeFor, useAuth } from "@/hooks/use-auth";
+import { ROUTES } from "@/constants";
+import { FullPageLoader } from "@/components/modules/full-page-loader";
+
+/** Sends a visitor to their home screen, or to sign-in. */
 export default function Home() {
-  return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-2 p-16 text-center">
-      <h1 className="text-2xl font-semibold text-neutral-900">MedCore HMS</h1>
-      <p className="text-sm text-neutral-500">
-        Foundation scaffold — role dashboards and workflows land in later phases.
-      </p>
-    </main>
-  );
+  const { status, user } = useAuth();
+  const router = useRouter();
+  useEffect(() => {
+    if (status === "authenticated" && user) router.replace(homeFor(user.role));
+    else if (status === "anonymous") router.replace(ROUTES.login);
+  }, [status, user, router]);
+  return <FullPageLoader />;
 }
