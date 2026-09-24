@@ -257,6 +257,8 @@ erDiagram
 
 Indexes: `MedicineBatch(medicineId, expiryDate)` (drives FIFO-by-expiry selection), `MedicineBatch(hospitalId, status)`, `LabOrderItem(status)`, unique `(medicineId, batchNumber)`.
 
+`Medicine.lowStockAlertedAt timestamptz null` (added Phase 9, migration `20260924090000_add_medicine_low_stock_latch`) is the FR-PHARM-004 once-per-crossing latch. It's set when a low-stock alert fires and cleared when available stock recovers to at least `reorderLevel` (`11-DECISIONS.md` D-022). "Available stock" everywhere means the sum of `quantityOnHand` over `ACTIVE` batches whose `expiryDate` is on or after the hospital's local today (D-023).
+
 ### 3.5 Billing, Notifications & Audit
 
 ```mermaid

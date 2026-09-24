@@ -9,6 +9,7 @@ import {
   MinLength,
   ValidateNested,
 } from "class-validator";
+import { IsIanaTimezone } from "../../common/validation/is-iana-timezone.decorator";
 import { AddressDto } from "./address.dto";
 
 export class CreateHospitalDto {
@@ -34,7 +35,7 @@ export class CreateHospitalDto {
   contactPhone?: string;
 
   @IsOptional()
-  @IsString()
+  @IsIanaTimezone()
   timezone?: string;
 
   @IsOptional()

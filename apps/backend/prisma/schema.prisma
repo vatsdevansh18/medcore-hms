@@ -13,7 +13,7 @@
 // migration SQL (prisma/migrations/.../migration.sql) instead.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // "native" covers local dev (Windows/macOS/glibc Linux); the musl target
   // is required for the node:20-alpine Docker images (infrastructure/docker),
   // whose OpenSSL 3.x didn't match Prisma's default-guessed engine binary at
@@ -646,18 +646,22 @@ model Attachment {
 }
 
 model Medicine {
-  id           String       @id @default(uuid())
-  hospitalId   String
-  hospital     Hospital     @relation(fields: [hospitalId], references: [id])
-  name         String
-  genericName  String?
-  form         MedicineForm
-  manufacturer String?
-  unit         String
-  reorderLevel Int          @default(10)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  deletedAt    DateTime?
+  id                String       @id @default(uuid())
+  hospitalId        String
+  hospital          Hospital     @relation(fields: [hospitalId], references: [id])
+  name              String
+  genericName       String?
+  form              MedicineForm
+  manufacturer      String?
+  unit              String
+  reorderLevel      Int          @default(10)
+  /// FR-PHARM-004 "fires exactly once per crossing" latch — set when a
+  /// low-stock alert is raised, cleared once available stock recovers to
+  /// >= reorderLevel. Added Phase 9 (docs/11-DECISIONS.md D-022).
+  lowStockAlertedAt DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  deletedAt         DateTime?
 
   batches           MedicineBatch[]
   prescriptionItems PrescriptionItem[]
@@ -709,9 +713,9 @@ model Prescription {
   /// FR-RX-003 — a prescription is immutable once generated; a correction
   /// is a new prescription referencing the one it supersedes, added Phase 7
   /// gap-fix (see docs/phase-reviews/PHASE-7-REVIEW.md).
-  supersedesId   String?       @unique
-  supersedes     Prescription? @relation("PrescriptionSupersession", fields: [supersedesId], references: [id])
-  supersededBy   Prescription? @relation("PrescriptionSupersession")
+  supersedesId String?       @unique
+  supersedes   Prescription? @relation("PrescriptionSupersession", fields: [supersedesId], references: [id])
+  supersededBy Prescription? @relation("PrescriptionSupersession")
 
   items PrescriptionItem[]
 

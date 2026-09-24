@@ -27,3 +27,17 @@ export const PRESCRIPTION_PDF_QUEUE = "pdf-generate";
 export interface PrescriptionPdfJobData {
   prescriptionId: string;
 }
+
+/** docs/03-ARCHITECTURE.md §12 `medicine-expiry-scan` queue — Phase 9. */
+export const MEDICINE_EXPIRY_SCAN_QUEUE = "medicine-expiry-scan";
+
+/** Stable scheduler id: `upsertJobScheduler` with the same id replaces
+ * rather than duplicates the schedule, so every API instance registering it
+ * at boot still yields exactly one nightly job. */
+export const MEDICINE_EXPIRY_SCAN_SCHEDULER_ID = "medicine-expiry-scan-nightly";
+
+/** 00:30 UTC nightly (06:00 in the default Asia/Kolkata timezone). Each
+ * hospital's "today" is still computed in its own timezone, so the exact
+ * run hour only affects when the digest arrives, not which batches count as
+ * expired — dispensing checks expiry itself on every request regardless. */
+export const MEDICINE_EXPIRY_SCAN_CRON = "30 0 * * *";

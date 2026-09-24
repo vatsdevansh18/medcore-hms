@@ -1,12 +1,19 @@
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { BullModule } from "@nestjs/bullmq";
-import { APPOINTMENT_REMINDER_QUEUE, PRESCRIPTION_PDF_QUEUE } from "./queue.constants";
+import {
+  APPOINTMENT_REMINDER_QUEUE,
+  MEDICINE_EXPIRY_SCAN_QUEUE,
+  PRESCRIPTION_PDF_QUEUE,
+} from "./queue.constants";
 import { AppointmentReminderQueueService } from "./appointment-reminder-queue.service";
 import { AppointmentReminderProcessor } from "./appointment-reminder.processor";
 import { ReminderDeliveryStub, REMINDER_DELIVERY_PORT } from "./reminder-delivery.stub";
 import { PrescriptionPdfQueueService } from "./prescription-pdf-queue.service";
 import { PrescriptionPdfProcessor } from "./prescription-pdf.processor";
+import { MedicinesModule } from "../medicines/medicines.module";
+import { MedicineExpiryScanProcessor } from "./medicine-expiry-scan.processor";
+import { MedicineExpiryScanScheduler } from "./medicine-expiry-scan.scheduler";
 
 /**
  * BullMQ needs its own Redis connection, never the shared `REDIS_CLIENT`
@@ -54,6 +61,19 @@ import { PrescriptionPdfProcessor } from "./prescription-pdf.processor";
         removeOnFail: { age: 30 * 24 * 60 * 60 },
       },
     }),
+    // docs/03-ARCHITECTURE.md §12: "N/A (idempotent scan)" — the scan is
+    // date-scoped and safe to re-run, so a couple of spaced retries only
+    // cover transient DB/Redis blips; the next night catches up anything else.
+    BullModule.registerQueue({
+      name: MEDICINE_EXPIRY_SCAN_QUEUE,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 60_000 },
+        removeOnComplete: { age: 30 * 24 * 60 * 60 },
+        removeOnFail: { age: 30 * 24 * 60 * 60 },
+      },
+    }),
+    MedicinesModule,
   ],
   providers: [
     AppointmentReminderQueueService,
@@ -61,7 +81,13 @@ import { PrescriptionPdfProcessor } from "./prescription-pdf.processor";
     { provide: REMINDER_DELIVERY_PORT, useClass: ReminderDeliveryStub },
     PrescriptionPdfQueueService,
     PrescriptionPdfProcessor,
+    MedicineExpiryScanProcessor,
+    MedicineExpiryScanScheduler,
   ],
-  exports: [AppointmentReminderQueueService, PrescriptionPdfQueueService],
+  exports: [
+    AppointmentReminderQueueService,
+    PrescriptionPdfQueueService,
+    MedicineExpiryScanScheduler,
+  ],
 })
 export class QueueModule {}

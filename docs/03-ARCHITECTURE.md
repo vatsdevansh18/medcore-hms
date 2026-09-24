@@ -291,7 +291,7 @@ BullMQ queues, one per concern, each with its own concurrency and retry policy:
 | `sms`                  | Notification event                         | 3 attempts, exponential backoff                                                                       | `notificationId` + channel        |
 | `pdf-generate`         | Prescription/report finalised              | 2 attempts                                                                                            | `sourceEntityId`                  |
 | `appointment-reminder` | Scheduled (repeatable job per appointment) | 3 attempts                                                                                            | `appointmentId` + reminder window |
-| `medicine-expiry-scan` | Cron, nightly                              | N/A (idempotent scan)                                                                                 | date-scoped                       |
+| `medicine-expiry-scan` | Cron, nightly (`30 0 * * *` UTC, BullMQ job scheduler; Phase 9) | N/A (idempotent scan); implemented as 3 attempts with 60s exponential backoff for transient DB/Redis faults | date-scoped (hospital-local date) |
 | `webhook-processing`   | Payment webhook received                   | handled synchronously in the request, not queued — signature check must gate the HTTP response itself | `providerEventId`                 |
 
 Failed jobs after max attempts move to a dead-letter state inspectable via Bull Board (dev/staging only, never exposed in production without auth).

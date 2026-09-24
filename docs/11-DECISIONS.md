@@ -290,3 +290,74 @@ Each entry: context, alternatives considered, decision, rationale, consequences.
 **Rationale:** The literal whole-endpoint reading would make it impossible for the ordering doctor to track an in-flight order at all, which nothing in `02-SRS.md`'s FR-LAB text asks for and would be a real workflow regression versus every other module. Gating the result payload specifically (not the order's existence/status) satisfies the matrix's actual intent — the *result* isn't visible pre-approval — without inventing an artificial blind spot. This is the same kind of documented literal-vs-practical interpretation call made for PATIENT's appointment-cancellation restriction in Phase 5.
 
 **Consequences:** RBAC/authorization e2e tests must assert both halves separately: that a non-approved item's `result` field is `null` for DOCTOR/NURSE/PATIENT (but populated for LAB_TECHNICIAN), and that the order itself is still visible (not a blanket `404`) to any "own hospital"/"self" caller regardless of approval state.
+
+---
+
+## D-022 — FR-PHARM-004 "once per crossing" implemented as a persisted latch, `Medicine.lowStockAlertedAt` (Phase 9)
+
+**Context:** `docs/10-TESTING-STRATEGY.md` §4 requires the low-stock alert to fire "exactly once per crossing of the reorder threshold, not on every subsequent read." Pre-existing `Medicine` had only `reorderLevel`, so nothing could remember whether an alert had already been raised.
+
+**Alternatives considered:** (a) Detect a crossing by comparing stock before and after each write, with no stored state. This breaks when stock drops without any write (a batch passes its expiry date between nightly scans), and when a threshold edit is the crossing. (b) Deduplicate by searching `Notification` rows for a recent alert. This is fragile: it depends on a retention window and on notification rows that Phase 11 may archive.
+
+**Decision:** Add a nullable `Medicine.lowStockAlertedAt` (migration `20260924090000_add_medicine_low_stock_latch`). `StockService.evaluateLowStock` runs after every stock- or threshold-changing write: batch receipt, dispense, reorder-level edit, and the expiry-scan quarantine.
+- If available stock is below `reorderLevel`, it tries to claim the latch with a conditional `updateMany(where lowStockAlertedAt IS NULL)`. Only the caller that actually claims it creates the alert rows.
+- If stock is at or above the level, it clears the latch, re-arming the next crossing.
+
+Read endpoints (`GET /medicines/low-stock`) never touch the latch. A newly created medicine starts with the latch set (when `reorderLevel > 0`): zero stock at creation isn't a crossing, since stock never was above the level. The first receipt that lifts stock to the level clears it.
+
+**Rationale:** A latch gives exactly-once-per-crossing behaviour however stock changes, and the conditional update makes the claim race-safe on its own. On top of that, every stock-changing transaction also holds a per-medicine row lock (`StockService.lockMedicines`), so evaluations never see a half-applied stock change.
+
+**Consequences:** Every new code path that changes a medicine's available stock or its `reorderLevel` must take `lockMedicines` and call `evaluateLowStock` in the same transaction. Otherwise a crossing can be missed until the next write.
+
+---
+
+## D-023 — Pharmacy dates use the hospital's own calendar day; expiry dates are inclusive (Phase 9)
+
+**Context:** `MedicineBatch.expiryDate` is a Postgres `DATE`. Deciding whether a batch has expired needs a definition of "today," and the hospital's timezone decides which calendar day that is. `Hospital.timezone` (default `Asia/Kolkata`) has existed since Phase 2. The appointment module deliberately treats all wall-clock times as UTC (comment in `src/doctors/availability.service.ts`). That comment says the simplification is in this log, but it was never actually recorded here. This entry notes the gap; it doesn't resolve the appointment side.
+
+**Decision:** Pharmacy computes "today" as the hospital's local calendar date (`hospitalToday(Hospital.timezone)` in `src/medicines/pharmacy-date.util.ts`). A batch is usable through the end of its expiry date and expired from the next local day (inclusive expiry, the usual reading of an "EXP" label). Dispensing checks this on every request, so a batch that expired since the last nightly scan is still never dispensed. Receiving a batch whose expiry date has already passed is rejected with `422 MEDICINE_EXPIRED`.
+
+**Rationale:** Expiry is a calendar-date concept, so comparing it against the UTC date would be off by a day for part of every day in any non-UTC hospital. The comparison is purely date-to-date, so using the real timezone here costs nothing extra, unlike the appointment module's time-of-day arithmetic.
+
+**Consequences:** Pharmacy is the first real consumer of `Hospital.timezone`. That exposed that the field was only `@IsString()`-validated since Phase 4, so an unknown zone would make every pharmacy date computation for that hospital throw. It's now validated as a real IANA zone (`IsIanaTimezone`, `src/common/validation/`) on hospital create and update, with a regression test in `test/directory.e2e-spec.ts`. The appointment module's UTC simplification is unchanged and still needs its own entry if it's kept.
+
+---
+
+## D-024 — Pharmacy RBAC interpretation and dispensing-endpoint placement (Phase 9)
+
+**Context:** `docs/07-RBAC-MATRIX.md` §3.7 gives Hospital Admin 🟡 on "Manage medicine catalog/batches" with no note explaining the restriction. `docs/08-API-CONTRACT.md` §4.8 places dispensing at `POST /prescriptions/:id/dispense`, but it's a stock operation. FR-PHARM-003 also says dispensing from a quarantined or exhausted batch "raises a validation error, not a silent fallback," which only makes sense if a caller can name a batch.
+
+**Decision:**
+- **Hospital Admin's 🟡 is read-only oversight.** HA can view batches (`GET /medicines/:id/batches`), low stock, and expiring stock, but can't create or edit catalog entries or receive batches. Those writes are Pharmacist-only. Super Admin has no pharmacy access (no `@BypassTenantScope()` routes).
+- **Dispensing lives in the pharmacy module** (`DispensingController`, `@Controller("prescriptions")`), keeping the contract's URL, rather than inside `PrescriptionsModule`.
+- **Optional `batchId` per dispense line is a physical-pick check, not an override.** If given, that batch must be the one FEFO would choose. A quarantined or expired batch → `422 MEDICINE_EXPIRED`. An exhausted batch → `422 INSUFFICIENT_STOCK`. A later-expiring batch while an earlier one is eligible → `422 VALIDATION_ERROR` with `expectedBatchId`. If omitted, the server picks FEFO and splits across batches as needed. Either way it never falls back to an ineligible batch.
+- **Insufficient stock is all-or-nothing.** If the stock that could cover the shortfall is expired or quarantined → `MEDICINE_EXPIRED`. Otherwise → the new `INSUFFICIENT_STOCK` code. Nothing is partially filled.
+
+**Rationale:** Keeping "manage" writes with the role that actually handles stock matches the Pharmacist being the only ✅ in that row. Letting the pharmacist confirm the batch in hand, with the server enforcing FEFO, is the realistic workflow and makes FR-PHARM-003's "no silent fallback" clause testable as written.
+
+**Consequences:** `INSUFFICIENT_STOCK` (422) added to `ApiErrorCode` and `docs/08-API-CONTRACT.md` §3.
+
+---
+
+## D-025 — FR-PHARM-005 digest: real scan, recipients, and notification rows; email send stubbed until Phase 11 (Phase 9)
+
+**Context:** FR-PHARM-005 says the nightly job "emails a digest to pharmacy staff." There's no email infrastructure yet; it's Phase 11 scope (`docs/03-ARCHITECTURE.md` §7/§12).
+
+**Decision:** Same "real-but-partial" scoping as D-020 and Phase 5's `ReminderDeliveryStub`.
+- The `medicine-expiry-scan` BullMQ queue and its nightly job scheduler (`30 0 * * *` UTC, registered idempotently at boot) are real. So are the quarantine step, the 30-day window query, and recipient resolution (active Pharmacists and the Hospital Admin, per §3.7's "Receive low-stock/expiry alerts" row).
+- One `Notification` row per recipient per hospital-local day (`channels: [EMAIL, IN_APP]`, `relatedEntityId` = the date, which is also the idempotency key) is real.
+- Only the SMTP send goes through `ExpiryDigestDeliveryStub`, which logs `[DEV STUB — Phase 11 ...]`.
+
+**Consequences:** Phase 11 must replace `EXPIRY_DIGEST_DELIVERY_PORT`'s stub with the real email worker, and migrate `StockService`'s low-stock notification rows onto the event bus alongside `LabService.notifyResultApproved`.
+
+---
+
+## D-026 — Redis caching of medicine inventory counts deferred (Phase 9)
+
+**Context:** `docs/03-ARCHITECTURE.md` §13 lists "medicine inventory counts for search-as-you-type (30s TTL)" as a Redis read cache.
+
+**Decision:** Not implemented this phase, the same call as D-014 for doctor availability. `GET /medicines` computes `availableQuantity` live with one indexed `groupBy` per page.
+
+**Rationale:** There's no frontend search-as-you-type consumer yet to measure against. The live query is cheap and always correct right after a dispense, and a cache would need write-path invalidation on receive, dispense, and quarantine. That adds a correctness risk for no measured gain.
+
+**Consequences:** Revisit in Phase 13/14's performance pass if profiling shows the need.

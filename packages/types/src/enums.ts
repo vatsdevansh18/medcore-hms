@@ -163,6 +163,16 @@ export type NotificationChannel = (typeof NotificationChannel)[keyof typeof Noti
 export const NotificationStatus = { PENDING: "PENDING", SENT: "SENT", FAILED: "FAILED" } as const;
 export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus];
 
+/** `Notification.type` values. `Notification.type` is a plain `String`
+ * column (not a Prisma enum), so these are the canonical spellings shared
+ * by every producer instead of ad hoc string literals. */
+export const NotificationType = {
+  LAB_RESULT_APPROVED: "LAB_RESULT_APPROVED",
+  LOW_STOCK_ALERT: "LOW_STOCK_ALERT",
+  MEDICINE_EXPIRY_DIGEST: "MEDICINE_EXPIRY_DIGEST",
+} as const;
+export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
+
 /** A patient's self-identified gender. Distinct from ReferenceRangeGender. */
 export const Gender = { MALE: "MALE", FEMALE: "FEMALE", OTHER: "OTHER" } as const;
 export type Gender = (typeof Gender)[keyof typeof Gender];

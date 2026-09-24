@@ -6,6 +6,7 @@ import {
   MaxLength,
   MinLength,
 } from "class-validator";
+import { IsIanaTimezone } from "../../common/validation/is-iana-timezone.decorator";
 
 /** PATCH /hospitals/:id — added in Phase 4 beyond the original endpoint table
  * to cover the "View/update own hospital settings" RBAC row (docs/07-RBAC-MATRIX.md §3.1). */
@@ -25,6 +26,6 @@ export class UpdateHospitalDto {
   contactPhone?: string;
 
   @IsOptional()
-  @IsString()
+  @IsIanaTimezone()
   timezone?: string;
 }

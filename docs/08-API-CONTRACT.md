@@ -53,6 +53,7 @@ Every thrown exception in the backend is normalised into the error envelope by a
 | `NOT_FOUND`                 | 404         | Resource does not exist within the caller's visible scope (used identically whether the resource truly doesn't exist or exists in another tenant — see §6) |
 | `SLOT_UNAVAILABLE`          | 409         | Appointment slot conflict (pre-check or DB exclusion constraint)                                                                                           |
 | `MEDICINE_EXPIRED`          | 422         | Attempted dispense from an expired/quarantined batch                                                                                                       |
+| `INSUFFICIENT_STOCK`        | 422         | Added in Phase 9: not enough eligible (unexpired, non-quarantined) stock to fill a dispense line, or a named batch is exhausted. Nothing is partially dispensed (`11-DECISIONS.md` D-024) |
 | `INVOICE_LOCKED`            | 409         | Attempted edit of a finalised invoice's line items                                                                                                         |
 | `WEBHOOK_SIGNATURE_INVALID` | 400         | Payment webhook signature verification failed                                                                                                              |
 | `RATE_LIMITED`              | 429         | Throttle threshold exceeded                                                                                                                                |
@@ -146,7 +147,7 @@ Full parameter/DTO detail lives in Swagger (generated in Phase 3+ from `@nestjs/
 | `GET /prescriptions/:id`     | Doctor / Nurse (own hospital) / Pharmacist (own) / Patient (own) | FR-RX-001     | Nurse added per §3.5's "for admin note" row, simplified to full own-hospital read (same pattern as other 🟡-scoped roles)                                |
 | `GET /prescriptions/:id/pdf` | Doctor / Patient (own)                              | FR-RX-003     | Narrower than "View prescription" — no Nurse/Pharmacist. Returns `{downloadUrl}` (pre-signed GET), `409` if the async PDF job hasn't finished yet          |
 | `POST /doctors/:id/signature` | Doctor (self)                                       | FR-RX-003     | Added in Phase 7 (not in the original index) — same declare-then-pre-signed-upload pattern as EMR attachments; returns `{uploadUrl}`                        |
-| `GET /medicines?search=`     | Hospital Admin (own) / Doctor (own) / Pharmacist (own) | §3.7          | Added in Phase 7, read-only — brought forward from the Phase 9 `FR-PHARM-001` row for prescription-creation search (`docs/11-DECISIONS.md` D-017); catalog/batch management remains Phase 9 |
+| `GET /medicines?search=`     | Hospital Admin (own) / Doctor (own) / Pharmacist (own) | §3.7          | Added in Phase 7, read-only — brought forward from the Phase 9 `FR-PHARM-001` row for prescription-creation search (`docs/11-DECISIONS.md` D-017); catalog/batch management added in Phase 9, see §4.8 |
 | `GET /medicines/:id`         | Hospital Admin (own) / Doctor (own) / Pharmacist (own) | §3.7          | Added in Phase 7                                                                                                                                       |
 
 ### 4.7 Laboratory
@@ -161,12 +162,20 @@ Full parameter/DTO detail lives in Swagger (generated in Phase 3+ from `@nestjs/
 
 ### 4.8 Pharmacy
 
-| Method + Path                        | Auth                              | FR               |
-| ------------------------------------ | --------------------------------- | ---------------- |
-| `GET /medicines?search=&hospitalId=` | Pharmacist / Doctor (own)         | FR-PHARM-001     |
-| `POST /medicines/:id/batches`        | Pharmacist (own)                  | FR-PHARM-001     |
-| `POST /prescriptions/:id/dispense`   | Pharmacist (own)                  | FR-PHARM-002/003 |
-| `GET /medicines/low-stock`           | Pharmacist / Hospital Admin (own) | FR-PHARM-004     |
+Implemented in Phase 9 on the existing `medicines/` module (`11-DECISIONS.md` D-017). RBAC per `07-RBAC-MATRIX.md` §3.7, with Hospital Admin's 🟡 on catalog/batch management read as read-only oversight (D-024). Dates are `YYYY-MM-DD` calendar dates, evaluated against the hospital's own local date (D-023). `hospitalId` always comes from the JWT; the original index's `hospitalId` query parameter is not accepted.
+
+| Method + Path                           | Auth                                       | FR               | Notes |
+| --------------------------------------- | ------------------------------------------ | ---------------- | ----- |
+| `GET /medicines?search=`                | Hospital Admin / Doctor / Pharmacist (own) | FR-PHARM-001     | Built Phase 7. Phase 9 adds a live `availableQuantity` per row (ACTIVE, unexpired batches only). |
+| `GET /medicines/:id`                    | Hospital Admin / Doctor / Pharmacist (own) | FR-PHARM-001     | Also includes `availableQuantity`. A soft-deleted medicine returns 404. |
+| `POST /medicines`                       | Pharmacist (own)                           | FR-PHARM-001     | Catalog entry: `name, genericName?, form, manufacturer?, unit, reorderLevel?`. Stock only ever arrives via batches. |
+| `PATCH /medicines/:id`                  | Pharmacist (own)                           | FR-PHARM-001/004 | Changing `reorderLevel` re-evaluates the low-stock latch (D-022). |
+| `GET /medicines/:id/batches`            | Pharmacist / Hospital Admin (own)          | FR-PHARM-001     | Paginated, in FEFO order. |
+| `POST /medicines/:id/batches`           | Pharmacist (own)                           | FR-PHARM-001     | `batchNumber, manufacturingDate, expiryDate, quantity, unitCost, mrp`. Duplicate batch number → 409. Already-expired → 422 `MEDICINE_EXPIRED`. Future manufacturing date or expiry ≤ manufacturing → 400. |
+| `POST /prescriptions/:id/dispense`      | Pharmacist (own)                           | FR-PHARM-002/003 | Body `{items:[{prescriptionItemId, quantity, batchId?}]}`. FEFO allocation that may split a line across batches. Atomic and row-locked. Returns the prescription with `dispenseRecords`. Errors: 422 `MEDICINE_EXPIRED` / `INSUFFICIENT_STOCK`; 422 `VALIDATION_ERROR` + `expectedBatchId` for a non-FEFO `batchId`; 400 over-dispense or foreign item; 409 `CANCELLED`/`DISPENSED` prescription. Sets `PARTIALLY_DISPENSED`/`DISPENSED`. |
+| `GET /medicines/low-stock`              | Pharmacist / Hospital Admin (own)          | FR-PHARM-004     | Live read of medicines below `reorderLevel`. Never raises an alert itself. Alerts are `Notification` rows raised once per crossing by the write paths (D-022). |
+| `GET /medicines/expiring?days=30`       | Pharmacist / Hospital Admin (own)          | FR-PHARM-005     | Added in Phase 9 (not in the original index). Dispensable batches expiring within `days` (1–365), soonest first. The same window as the nightly digest. |
+| _(job)_ `medicine-expiry-scan`, nightly | System                                     | FR-PHARM-003/005 | Quarantines expired ACTIVE batches, re-evaluates low stock, writes one digest `Notification` per recipient per day. Email send stubbed until Phase 11 (D-025). |
 
 ### 4.9 Billing & Payments
 

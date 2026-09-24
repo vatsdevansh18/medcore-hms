@@ -7,6 +7,7 @@ import {
   LabResultDecision,
   LabResultFlag,
   NotificationChannel,
+  NotificationType,
   UserRole,
 } from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
@@ -319,7 +320,7 @@ export class LabService {
           data: {
             hospitalId,
             recipientUserId,
-            type: "LAB_RESULT_APPROVED",
+            type: NotificationType.LAB_RESULT_APPROVED,
             title: "Lab result approved",
             body: `The result for "${labTestName}" is now approved and available to view.`,
             channels: [NotificationChannel.IN_APP],

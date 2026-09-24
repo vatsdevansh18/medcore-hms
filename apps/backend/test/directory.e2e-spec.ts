@@ -208,6 +208,32 @@ describe("Directory management (e2e)", () => {
       expect(verify.body.data.status).toBe("ACTIVE");
     });
 
+    // Regression (Phase 9): timezone was only @IsString() since Phase 4; the
+    // pharmacy expiry logic is its first consumer and throws on an
+    // unrecognised zone, so it's now validated as a real IANA zone.
+    it("rejects an invalid IANA timezone on hospital create and update (400)", async () => {
+      await request(app.getHttpServer())
+        .post("/api/hospitals")
+        .set("Authorization", `Bearer ${superAdminToken}`)
+        .send({
+          name: `Bad TZ ${suffix}`,
+          slug: `bad-tz-${suffix}`,
+          contactEmail: `badtz-${suffix}@test.medcore.test`,
+          timezone: "Mars/Olympus_Mons",
+        })
+        .expect(400);
+      await request(app.getHttpServer())
+        .patch(`/api/hospitals/${hospitalAId}`)
+        .set("Authorization", `Bearer ${adminAToken}`)
+        .send({ timezone: "not a zone" })
+        .expect(400);
+      await request(app.getHttpServer())
+        .patch(`/api/hospitals/${hospitalAId}`)
+        .set("Authorization", `Bearer ${adminAToken}`)
+        .send({ timezone: "Asia/Kolkata" })
+        .expect(200);
+    });
+
     it("a HOSPITAL_ADMIN cannot create a hospital (FORBIDDEN_ROLE)", async () => {
       await request(app.getHttpServer())
         .post("/api/hospitals")
