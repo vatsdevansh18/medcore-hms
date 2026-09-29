@@ -654,3 +654,37 @@ The user asked for them before Phase 14. Building them exposed two defects older
 - relaxing CORS to `*` (any site could then use a leaked pre-signed URL from a victim's browser session);
 - proxying uploads through the API (against `03-ARCHITECTURE.md` §10: the API never carries file bytes);
 - letting `POST /users` accept a `hospitalId` for Super Admins (it would mix the tenant-from-JWT rule into a route every Hospital Admin uses).
+
+---
+
+## D-043 — UI/UX polish: measured accessibility and a lighter motion layer (Phase 14)
+
+**Context:** Phase 14 delivers NFR-A11Y-001..004 and NFR-PERF-003 and polishes every screen against `04-UI-UX.md` §9. Until now accessibility was checked by hand and by a few Playwright assertions. Nothing measured the colour tokens or scanned rendered pages, and the form-heavy screens loaded up to 250 kB first.
+
+**Decision:**
+- **Contrast is a test** (`src/lib/contrast.test.ts`). It parses `globals.css` and checks every foreground/background pair the components use, in both themes: text 4.5:1, focus rings and input borders 3:1 (WCAG 1.4.11). It also checks that the OS-preference dark block and the explicit `data-theme="dark"` block define the same values.
+  - It found 7 failing pairs. The fix was the nearest passing shade: light `--subtle`, `--success`, and `--border-strong`; dark `--primary` and `--border-strong`.
+  - A new `--danger-foreground` token replaced `text-white` on danger surfaces: white on the dark theme's light red was 2.8:1.
+- **Every screen is scanned by axe** (`e2e/accessibility.spec.ts`, `@axe-core/playwright`, dev dependency): each as its role, in light and dark, against WCAG 2.1 A and AA, once data has loaded. It found and fixed:
+  - a link inside text told apart by colour alone (links in `p`/`dd` are now underlined);
+  - unlabelled hidden file inputs;
+  - the notification badge's contrast;
+  - focusable chart internals inside an `aria-hidden` drawing (Recharts `accessibilityLayer={false}`; the `figcaption` is the text alternative);
+  - a table scroll box keyboard users couldn't reach (focusable, named by the caption).
+- **Keyboard:**
+  - a "Skip to main content" link;
+  - `main` is focusable;
+  - dialogs opened from state now return focus where it was (`useReturnFocus`). Radix only restores focus to a `Dialog.Trigger`, and none of our 7 dialogs has one, so focus had been falling to the top of the page.
+  - Playwright covers keyboard-only sign-in, the skip link, and a dialog's focus trap, Escape, and return.
+- **Tablets (768–1024 px) get an icon rail** (§2.4, §4). Labels stay in the DOM for screen readers, with a `title` on hover, and the full sidebar comes back from 1024 px.
+- **Motion is CSS, and framer-motion is removed.** It was a 40 kB (gzip) chunk on most staff screens, used only for two effects: the dashboard's first-load stagger and toast enter/exit. They're now CSS keyframes, plus a 150 ms route fade (`template.tsx`) and a badge animation when a status changes in place (§7). The global reduced-motion rule turns all of them off. Measured: 20 routes are 41–43 kB smaller, the largest first load went from 250 to 207 kB, and none grew.
+- **Never colour alone:** low stock in the medicine list now shows a word and an icon, not only a colour.
+- **The browser suite resets the rate limiter before each test** (`resetRateLimits` in `e2e/fixture.ts`, using the backend's ioredis). Every page load refreshes the in-memory token (D-038), and the axe scan loads about 100 pages, so the suite ran out of the auth routes' budget and every later test failed with "Too many attempts". This mirrors the backend suite (D-041).
+- **The gate's browser run uses production builds:** the web app's `runtime` image and the API from `node dist/main.js`. The dev servers failed it for reasons unrelated to the product. Next compiled routes on demand in 10–15 s with under 1 GB of RAM free, and the API's `--watch` restarted mid-run when the fixture script ran in the backend folder.
+- **NFR-PERF-003:** every API read behind a controller is bounded. The four that weren't (a user's sessions; a patient's allergies, vaccinations, and family history) are capped: 50 sessions, 200 clinical rows, newest first. Those endpoints return plain arrays the portal shows whole, so a cap fits better than pagination. The unbounded reads left are all inside nightly jobs or bounded by the request's own id list.
+
+**Rejected:**
+- keeping framer-motion (40 kB for effects CSS does equally well);
+- pagination for the patient clinical lists (it breaks the portal's contract for lists a real patient never fills);
+- editing `components/ui/dialog.tsx` to restore focus for every dialog (the hook keeps the shadcn primitives upgradeable);
+- `zod/mini` to trim the 25 kB zod chunk (a different API across every form, for less than framer saved; revisit if the budget tightens).

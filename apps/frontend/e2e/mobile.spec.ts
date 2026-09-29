@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { loadFixture } from "./fixture";
+import { loadFixture, resetRateLimits } from "./fixture";
+
+// Each test starts with fresh rate-limit counters (see resetRateLimits).
+test.beforeEach(async () => {
+  await resetRateLimits();
+});
 
 /** The portal is mobile-first (docs/04-UI-UX.md §4): navigation moves into
  * a drawer and nothing scrolls sideways. */

@@ -240,6 +240,8 @@ export class TokenService {
       this.prisma.refreshTokenSession.findMany({
         where: { userId, revokedAt: null },
         orderBy: { createdAt: "desc" },
+        // NFR-PERF-003: a bounded list; the newest devices come first (D-043).
+        take: 50,
       }),
     );
   }

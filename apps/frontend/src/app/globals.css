@@ -5,6 +5,11 @@
  * Tailwind utilities (bg-surface, text-muted, border-border, text-primary...),
  * never raw hex values. Every token has a dark pair; dark mode follows the OS
  * unless the user picks one explicitly (html[data-theme]).
+ *
+ * Every text/background pair meets WCAG 2.1 AA (4.5:1), and focus rings and
+ * input borders meet 3:1 (1.4.11), in both themes; src/lib/contrast.test.ts
+ * enforces it. Phase 14 darkened --subtle, --success, and --border-strong
+ * (light) and adjusted --primary and --border-strong (dark) to get there.
  */
 :root {
   --primary: #0a2a5e;
@@ -16,17 +21,18 @@
   --surface: #ffffff;
   --surface-muted: #f1f3f6;
   --border: #dde1e7;
-  --border-strong: #c4cad3;
+  --border-strong: #878b92;
   --foreground: #111827;
   --muted: #4b5563;
-  --subtle: #6b7280;
+  --subtle: #676e7c;
 
-  --success: #1b7f4c;
+  --success: #1b7d4b;
   --success-surface: #e7f5ee;
   --warning: #b45309;
   --warning-surface: #fdf3e6;
   --danger: #b91c1c;
   --danger-surface: #fdecec;
+  --danger-foreground: #ffffff;
   --info: #1d4ed8;
   --info-surface: #e8effd;
 
@@ -36,7 +42,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --primary: #5b8def;
+    --primary: #5f90ef;
     --primary-hover: #7aa3f3;
     --primary-foreground: #0b1220;
     --primary-surface: #132a4d;
@@ -45,7 +51,7 @@
     --surface: #121925;
     --surface-muted: #182131;
     --border: #263145;
-    --border-strong: #34425c;
+    --border-strong: #626d81;
     --foreground: #e6eaf2;
     --muted: #a8b3c5;
     --subtle: #8391a7;
@@ -56,6 +62,7 @@
     --warning-surface: #2b2110;
     --danger: #f87171;
     --danger-surface: #2d1415;
+    --danger-foreground: #1a0b0b;
     --info: #60a5fa;
     --info-surface: #122239;
 
@@ -65,7 +72,7 @@
 }
 
 :root[data-theme="dark"] {
-  --primary: #5b8def;
+  --primary: #5f90ef;
   --primary-hover: #7aa3f3;
   --primary-foreground: #0b1220;
   --primary-surface: #132a4d;
@@ -74,7 +81,7 @@
   --surface: #121925;
   --surface-muted: #182131;
   --border: #263145;
-  --border-strong: #34425c;
+  --border-strong: #626d81;
   --foreground: #e6eaf2;
   --muted: #a8b3c5;
   --subtle: #8391a7;
@@ -85,6 +92,7 @@
   --warning-surface: #2b2110;
   --danger: #f87171;
   --danger-surface: #2d1415;
+  --danger-foreground: #1a0b0b;
   --info: #60a5fa;
   --info-surface: #122239;
 
@@ -111,6 +119,7 @@
   --color-warning-surface: var(--warning-surface);
   --color-danger: var(--danger);
   --color-danger-surface: var(--danger-surface);
+  --color-danger-foreground: var(--danger-foreground);
   --color-info: var(--info);
   --color-info-surface: var(--info-surface);
   --color-focus: var(--focus-ring);
@@ -137,6 +146,14 @@ body {
   font-size: var(--text-base);
 }
 
+/* WCAG 1.4.1: a link inside a sentence is underlined, so it isn't told
+ * apart from the text around it by colour alone. */
+p a,
+dd a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* §3: a visible focus ring on every interactive element. */
 :focus-visible {
   outline: 2px solid var(--focus-ring);
@@ -159,5 +176,56 @@ body {
   }
   100% {
     background-position: 400px 0;
+  }
+}
+
+/* §7 "State changes": a badge whose status just changed settles in. */
+@keyframes badge-change {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* §7 "Transitions": each page fades in on navigation. */
+@keyframes page-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* §7 motion, all CSS (Phase 14 dropped framer-motion, D-043). */
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
   }
 }

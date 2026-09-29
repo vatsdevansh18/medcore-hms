@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { loadFixture, type PortalFixture } from "./fixture";
+import { loadFixture, type PortalFixture, resetRateLimits } from "./fixture";
+
+// Each test starts with fresh rate-limit counters (see resetRateLimits).
+test.beforeEach(async () => {
+  await resetRateLimits();
+});
 
 /**
  * Phase 13: role dashboards, global search, filtered lists

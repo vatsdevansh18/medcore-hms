@@ -73,7 +73,7 @@ function WeeklyHours({ doctorId, schedule }: { doctorId: string; schedule: Docto
           const id = r.key;
           return (
             <li key={id} className="rounded-md border border-border p-3">
-              <div className="grid items-end gap-2 sm:grid-cols-[10rem_7rem_7rem_8rem_auto]">
+              <div className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-[10rem_9.5rem_9.5rem_7rem_auto]">
                 <div className="flex flex-col gap-1">
                   <label htmlFor={`${id}-day`} className="text-xs text-muted">
                     Day
@@ -221,7 +221,7 @@ function Exceptions({ doctorId, exceptions }: { doctorId: string; exceptions: Av
         </ul>
       )}
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-1 border-t border-border pt-3">
-        <div className="grid gap-x-3 sm:grid-cols-2">
+        <div className="grid gap-x-3">
           <FormField label="Date" error={errors.date?.message}>
             <Input type="date" min={today} {...register("date", { validate: (v) => (v && v >= today) || "Choose today or a later date." })} />
           </FormField>
@@ -320,6 +320,8 @@ function Signature({ doctorId }: { doctorId: string }) {
         id="signature-file"
         type="file"
         className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
         accept={Object.values(SIGNATURE_TYPES).flat().join(",")}
         onChange={(e) => void onFile(e.target.files?.[0])}
       />

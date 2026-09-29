@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Activity, LogOut, Menu, Moon, Sun, X, type LucideIcon } from "lucide-react";
 import { useUiStore } from "@/store/ui-store";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { cn } from "@/lib/utils";
 import { NotificationBell, NotificationPanel } from "./notification-panel";
 
@@ -20,7 +21,22 @@ export function isNavActive(pathname: string, href: string, home: string): boole
   return href === home ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavLinks({ items, home, onNavigate }: { items: ShellNavItem[]; home: string; onNavigate?: () => void }) {
+/**
+ * `rail`: on tablets (md–lg) the sidebar is an icon rail (docs/04-UI-UX.md
+ * §2.4, §4). Labels stay in the DOM for screen readers (sr-only) and appear
+ * again from lg; a `title` gives sighted users the name on hover.
+ */
+function NavLinks({
+  items,
+  home,
+  onNavigate,
+  rail = false,
+}: {
+  items: ShellNavItem[];
+  home: string;
+  onNavigate?: () => void;
+  rail?: boolean;
+}) {
   const pathname = usePathname();
   return (
     <ul className="flex flex-col gap-1">
@@ -32,13 +48,15 @@ function NavLinks({ items, home, onNavigate }: { items: ShellNavItem[]; home: st
               href={href}
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
+              title={rail ? label : undefined}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-base",
+                rail && "md:justify-center md:px-0 lg:justify-start lg:px-3",
                 active ? "bg-primary-surface font-medium text-primary" : "text-muted hover:bg-surface-muted hover:text-foreground",
               )}
             >
-              <Icon className="size-4" aria-hidden="true" />
-              {label}
+              <Icon className="size-4 shrink-0" aria-hidden="true" />
+              <span className={rail ? "md:sr-only lg:not-sr-only" : undefined}>{label}</span>
             </Link>
           </li>
         );
@@ -95,23 +113,34 @@ export function AppShell({
 }) {
   const mobileNavOpen = useUiStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen);
+  const returnFocus = useReturnFocus(mobileNavOpen);
   return (
     <div className="flex min-h-full flex-1">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-surface px-3 py-4 md:flex">
-        <Link href={home} className="mb-6 flex items-center gap-2 px-3 text-primary">
-          <Activity className="size-5" aria-hidden="true" />
-          <span className="font-semibold">MedCore</span>
+      {/* WCAG 2.4.1: skip the navigation. Visible only when focused. */}
+      <a
+        href="#main"
+        className="sr-only z-[70] rounded-md bg-surface px-3 py-2 font-medium text-primary shadow focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+      >
+        Skip to main content
+      </a>
+      <aside className="sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border bg-surface px-2 py-4 md:flex md:w-16 lg:w-60 lg:px-3">
+        <Link href={home} className="mb-6 flex items-center gap-2 px-3 text-primary md:justify-center md:px-0 lg:justify-start lg:px-3" title="MedCore">
+          <Activity className="size-5 shrink-0" aria-hidden="true" />
+          <span className="font-semibold md:sr-only lg:not-sr-only">MedCore</span>
         </Link>
         <nav aria-label={navLabel}>
-          <NavLinks items={items} home={home} />
+          <NavLinks items={items} home={home} rail />
         </nav>
-        {context && <div className="mt-auto px-3 text-xs text-subtle">{context}</div>}
+        {context && <div className="mt-auto hidden px-3 text-xs text-subtle lg:block">{context}</div>}
       </aside>
 
       <DialogPrimitive.Root open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <DialogPrimitive.Portal>
           <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 md:hidden" />
-          <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-surface p-4 md:hidden">
+          <DialogPrimitive.Content
+            onCloseAutoFocus={returnFocus}
+            className="fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-surface p-4 md:hidden"
+          >
             <div className="mb-4 flex items-center justify-between">
               <DialogPrimitive.Title className="font-semibold">Menu</DialogPrimitive.Title>
               <DialogPrimitive.Close className="rounded-md p-1 text-subtle hover:bg-surface-muted">
@@ -157,7 +186,9 @@ export function AppShell({
             </button>
           </div>
         </header>
-        <main className={cn("mx-auto w-full flex-1 px-4 py-6 md:px-6", maxWidth)}>{children}</main>
+        <main id="main" tabIndex={-1} className={cn("mx-auto w-full flex-1 px-4 py-6 outline-none md:px-6", maxWidth)}>
+          {children}
+        </main>
       </div>
       <NotificationPanel />
     </div>

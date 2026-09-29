@@ -23,6 +23,7 @@ import { RoleGate } from "@/components/modules/role-gate";
 import { useAppointmentInvoices, useOpenInvoice, useStaffAppointment, useUpdateAppointmentStatus } from "@/services/workflows";
 import { useWorkspaceTimeZone } from "@/hooks/use-hospital";
 import { useAuthStore } from "@/store/auth-store";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { actionTarget, appointmentActions, canBill, canOpenEncounter, type AppointmentAction } from "@/lib/appointment-actions";
 import { cancelReasonSchema, type CancelReasonValues } from "@/lib/staff-validation";
 import { doctorName, formatDateTime, formatMoney, personName } from "@/lib/format";
@@ -63,9 +64,10 @@ function CancelDialog({
     handleSubmit,
     formState: { errors },
   } = useForm<CancelReasonValues>({ resolver: zodResolver(cancelReasonSchema), mode: "onBlur", reValidateMode: "onChange", defaultValues: { reason: "" } });
+  const returnFocus = useReturnFocus(true);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent onCloseAutoFocus={returnFocus}>
         <DialogTitle>Cancel this appointment?</DialogTitle>
         <DialogDescription>{CONSEQUENCE.CANCEL}</DialogDescription>
         <form onSubmit={handleSubmit(({ reason }) => onSubmit(reason))} noValidate className="mt-4 flex flex-col gap-2">

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { FormError } from "./states";
 
 /**
@@ -35,9 +36,10 @@ export function ConfirmDialog({
   onConfirm: () => void;
   children?: ReactNode;
 }) {
+  const returnFocus = useReturnFocus(open);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onCloseAutoFocus={returnFocus}>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{consequence}</DialogDescription>
         {children && <div className="mt-4">{children}</div>}

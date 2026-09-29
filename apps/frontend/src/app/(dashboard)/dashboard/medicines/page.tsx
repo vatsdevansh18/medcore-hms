@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import { UserRole, type MedicineView } from "@medcore/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,9 +31,11 @@ const columns: Column<MedicineView>[] = [
     header: "In stock",
     align: "right",
     cell: (m) => (
-      <span className={m.availableQuantity < m.reorderLevel ? "font-medium text-warning" : undefined}>
+      // Low stock is shown in words and an icon too, never by colour alone (NFR-A11Y-002).
+      <span className={m.availableQuantity < m.reorderLevel ? "inline-flex items-center gap-1 font-medium text-warning" : undefined}>
+        {m.availableQuantity < m.reorderLevel && <AlertTriangle className="size-3.5" aria-hidden="true" />}
         {m.availableQuantity} {m.unit}
-        {m.availableQuantity < m.reorderLevel && <span className="sr-only"> (below reorder level)</span>}
+        {m.availableQuantity < m.reorderLevel && <span className="text-xs font-normal">low</span>}
       </span>
     ),
   },

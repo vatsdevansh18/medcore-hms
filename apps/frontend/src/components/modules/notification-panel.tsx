@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { useRouter } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Bell, X } from "lucide-react";
@@ -45,7 +46,7 @@ export function NotificationBell() {
     >
       <Bell className="size-5" aria-hidden="true" />
       {unread > 0 && (
-        <span className="absolute right-1 top-1 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-4 text-white">
+        <span className="absolute right-1 top-1 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-4 text-danger-foreground">
           {unread > 9 ? "9+" : unread}
         </span>
       )}
@@ -86,11 +87,15 @@ export function NotificationPanel() {
     if (href) router.push(href);
   }
 
+  const returnFocus = useReturnFocus(open);
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30" />
-        <DialogPrimitive.Content className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col border-l border-border bg-surface shadow-xl">
+        <DialogPrimitive.Content
+          onCloseAutoFocus={returnFocus}
+          className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col border-l border-border bg-surface shadow-xl"
+        >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <DialogPrimitive.Title className="text-lg font-semibold">Notifications</DialogPrimitive.Title>
             <DialogPrimitive.Close className="rounded-md p-1 text-subtle hover:bg-surface-muted">

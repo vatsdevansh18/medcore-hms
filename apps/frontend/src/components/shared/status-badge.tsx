@@ -1,3 +1,5 @@
+"use client";
+
 import {
   AlertTriangle,
   Ban,
@@ -10,6 +12,7 @@ import {
   UserX,
   type LucideIcon,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -99,14 +102,37 @@ export function statusStyle(status: string, kind?: StatusKind): StatusStyle {
   return override ?? STYLES[status] ?? { label: status.replace(/_/g, " ").toLowerCase(), tone: "neutral", icon: CircleDashed };
 }
 
+/** True for a moment after `status` changes on a badge already on screen
+ * (never on first render), so only a real transition animates. */
+function useJustChanged(status: string): boolean {
+  const previous = useRef(status);
+  const [changed, setChanged] = useState(false);
+  useEffect(() => {
+    if (previous.current === status) return;
+    previous.current = status;
+    setChanged(true);
+    const timer = setTimeout(() => setChanged(false), 400);
+    return () => clearTimeout(timer);
+  }, [status]);
+  return changed;
+}
+
+/**
+ * A status in words, with an icon and a colour (never colour alone, §1.3).
+ * When the status changes in place (e.g. PENDING → CONFIRMED), the badge
+ * itself animates, not the row (§7 "State changes"); reduced motion turns
+ * it off with every other animation (globals.css).
+ */
 export function StatusBadge({ status, kind, className }: { status: string; kind?: StatusKind; className?: string }) {
   const style = statusStyle(status, kind);
   const Icon = style.icon;
+  const justChanged = useJustChanged(status);
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium",
         TONES[style.tone],
+        justChanged && "[animation:badge-change_300ms_ease-out]",
         className,
       )}
       data-status={status}

@@ -1,6 +1,11 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { api, loadFixture, login, type PortalFixture } from "./fixture";
+import { api, loadFixture, login, type PortalFixture, resetRateLimits } from "./fixture";
 import { runFixtureScript } from "./global-setup";
+
+// Each test starts with fresh rate-limit counters (see resetRateLimits).
+test.beforeEach(async () => {
+  await resetRateLimits();
+});
 
 /**
  * Phase 13B gate (docs/05-DEVELOPMENT-PLAN.md): the full patient journey
@@ -82,7 +87,11 @@ test("a patient's whole visit, from the front desk to the portal, through the UI
       await desk.getByRole("link", { name: "Open appointment" }).click();
       await expect(desk).toHaveURL(/\/dashboard\/appointments\/[0-9a-f-]{36}$/);
       appointmentUrl = new URL(desk.url()).pathname;
-      if (await desk.getByRole("button", { name: "Confirm" }).isVisible()) {
+      // Wait for the status to load before deciding: isVisible() doesn't wait,
+      // and on a fast (production) build it ran before the data arrived.
+      const status = desk.locator('[data-status="PENDING"], [data-status="CONFIRMED"]').first();
+      await expect(status).toBeVisible();
+      if ((await status.getAttribute("data-status")) === "PENDING") {
         await desk.getByRole("button", { name: "Confirm" }).click();
       }
       await expect(desk.getByText("Confirmed", { exact: true })).toBeVisible();

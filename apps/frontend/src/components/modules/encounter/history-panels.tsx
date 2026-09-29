@@ -249,6 +249,8 @@ export function AttachmentsPanel({ recordId, attachments }: { recordId: string; 
             id={`attach-${recordId}`}
             type="file"
             className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
             accept={Object.values(ATTACHMENT_TYPES).flat().join(",")}
             onChange={(e) => void onFile(e.target.files?.[0])}
           />

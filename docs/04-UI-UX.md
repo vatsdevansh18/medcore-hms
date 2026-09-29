@@ -89,6 +89,7 @@ Every data-bearing view defines all four explicitly — this is treated as a com
 - Status announcements (toasts, form errors, async completion) use `aria-live="polite"` regions.
 - Minimum WCAG 2.1 AA contrast for all text and meaningful icons.
 - Every image/icon conveying information (not purely decorative) has an accessible label.
+- As built (Phase 14, D-043): contrast is enforced by a unit test over the tokens, every screen is scanned by axe in both themes, a skip link leads past the navigation, and every dialog returns focus to where it opened from.
 
 ## 4. Responsive Behaviour
 
@@ -126,7 +127,7 @@ No two staff roles receive the same dashboard with swapped labels; each is a dis
 
 ## 7. Micro-Interaction & Animation Guidelines
 
-Framer Motion is used exclusively for:
+Motion is implemented as CSS keyframes in `globals.css` (Phase 14 removed Framer Motion to save 40 kB per staff screen; `11-DECISIONS.md` D-043). It is used exclusively for:
 
 - **Transitions:** route/page transitions are a short (150–200ms) fade/slide, signalling navigation without disorienting.
 - **Feedback:** button press states, form-field success flash, drag/drop reorder (medicine batch priority, if used).

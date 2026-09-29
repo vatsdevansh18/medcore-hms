@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { api, loadFixture, login as apiLogin, type PortalFixture } from "./fixture";
+import { api, loadFixture, login as apiLogin, type PortalFixture, resetRateLimits } from "./fixture";
+
+// Each test starts with fresh rate-limit counters (see resetRateLimits).
+test.beforeEach(async () => {
+  await resetRateLimits();
+});
 
 let fx: PortalFixture;
 test.beforeAll(() => {

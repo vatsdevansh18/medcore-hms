@@ -16,8 +16,10 @@ Building **MedCore HMS**, a multi-tenant Hospital Management SaaS platform, as a
 
 Latest instruction (this session): "Do step 1 then step 2 then continue with START PHASE 14". So:
 1. Phase 13B was committed (`cfb6944`).
-2. The five missing screens were built as a 13B follow-up (D-042) and committed separately.
-3. **Phase 14 (UI/UX polish) is authorized and in progress.** See `docs/phase-reviews/PHASE-14-REVIEW.md` once written.
+2. The five missing screens were built as a 13B follow-up (D-042) and committed (`d320ea2`).
+3. **Phase 14 (UI/UX polish) was built and gated PASS WITH DOCUMENTED MINOR ISSUES.** See `docs/phase-reviews/PHASE-14-REVIEW.md`. **It is NOT committed:** the instruction authorized committing 13B only.
+
+Current objective: **wait for the user.** Ask whether to commit Phase 14, then wait for "START PHASE 15" (Testing & Hardening).
 
 ## Current State
 
@@ -28,7 +30,13 @@ Latest instruction (this session): "Do step 1 then step 2 then continue with STA
   - Live Resend/Twilio: UNVERIFIED (no credentials).
   - Phase 13's UNVERIFIED Playwright rerun is **closed** (35/35 this session).
 
-**Git:** this session committed Phase 13 (`e6d4a32`), Phase 13B (`cfb6944`), and the 13B follow-up (the commit after it, "feat: Phase 13B follow-up — practice, EMR history, attachments, hospital onboarding"). Exclude `.claude-flow/` when staging.
+**Git:** this session committed Phase 13 (`e6d4a32`), Phase 13B (`cfb6944`), and the 13B follow-up (`d320ea2`). **Phase 14 is uncommitted** in the working tree. Exclude `.claude-flow/` when staging.
+
+**Phase 14 verified, after the last change:**
+- frontend typecheck and lint PASS; Vitest 140/140 (59 contrast checks);
+- **Playwright 47/47 against production builds** (web `runtime` image + API `node dist/main.js`), including the axe scan of every screen in both themes and the keyboard tests;
+- backend 346/346 (18 suites), unit 5/5;
+- the frontend production image builds; 20 routes are 41–43 kB lighter (largest first load 207 kB, was 250).
 
 **Verified this session, after the last code change:**
 - **Backend:** typecheck and lint **PASS**; unit 5/5; full e2e **338/338, 17/17 suites** (289 + 47 in `staff-workflows.e2e-spec.ts` + 2 in `rate-limit.e2e-spec.ts`); two filter mutations caught.
@@ -44,7 +52,9 @@ Latest instruction (this session): "Do step 1 then step 2 then continue with STA
 - the doctor's signature upload (FR-RX-003);
 - Super Admin hospital onboarding (FR-HOSP-001).
 
-**Environment right now:**
+**Environment right now (after Phase 14):** all MedCore servers are stopped; ports 3000/3001 are free; the `medcore-web-e2e` container was removed. Postgres, Redis, and LocalStack containers are running. task_2 is still stopped (the user restarts it).
+
+**Environment (earlier in the session):**
 - `postgres`, `redis`, `localstack` containers are running; `api`/`frontend` containers are stopped (images rebuilt this phase).
 - The native dev servers were started for the Playwright runs and **stopped afterwards**; ports 3000/3001 are free.
 - **Another project on this machine, `D:\Coding\InternMo\task_2\backend` (`tsx watch src/server.ts`), also uses port 3001.** With the user's permission it was stopped this session (the watcher PID 20400 and its child) for the browser tests, and **not restarted**; the user restarts it themselves. Next time 3001 is busy, identify the owner and **ask before stopping anything**. Stopping only the child isn't enough: the `tsx watch` parent restarts it.
@@ -140,6 +150,22 @@ Relevant to what comes next (the 13B commit, the screen gaps, Phase 14):
 
 ## Changes Made (this session)
 
+**Phase 14 (uncommitted, D-043):**
+- **Contrast:** `src/lib/contrast.ts` and its test; 5 token shades adjusted; a new `--danger-foreground` token.
+- **Accessibility:**
+  - `e2e/accessibility.spec.ts` (axe on every screen in both themes, plus keyboard tests), with `@axe-core/playwright` as a dev dependency;
+  - in-text link underline, hidden file inputs, chart `accessibilityLayer={false}`, a focusable table scroll region;
+  - a skip link, the tablet icon rail, and `useReturnFocus` on all 7 dialogs;
+  - `Panel` is a named region.
+- **Motion:** CSS keyframes (`page-in` through `template.tsx`, `badge-change`, `reveal-in`, `toast-in/out`), and **framer-motion removed**.
+- **Performance:** list caps on sessions and on patient allergies/vaccinations/family history (NFR-PERF-003).
+- **Visual fixes:** practice time inputs and exception form; low stock shows a word and an icon.
+- **Test harness:** `resetRateLimits` in `e2e/fixture.ts`, with a `beforeEach` in every spec; the journey's `isVisible()` race fixed.
+- **Docs:**
+  - D-043; `04-UI-UX.md` §3 and §7; architecture §2; testing strategy;
+  - `CLAUDE.md` (+4);
+  - `PHASE-14-REVIEW.md`.
+
 **Phase 13 (committed `e6d4a32`):** analytics, dashboards, search, and queues; details in `PHASE-13-REVIEW.md`. Its UNVERIFIED Playwright item was closed later this session, and the review was updated with the history kept.
 
 **Phase 13B (uncommitted):**
@@ -206,26 +232,29 @@ Relevant to what comes next (the 13B commit, the screen gaps, Phase 14):
   - **Stopping task_2's server child alone didn't free port 3001:** its `tsx watch` parent restarted it. The parent had to be stopped (with the user's permission).
   - **A Python-in-bash heredoc failed again** ("unexpected EOF while looking for matching `'`") for a long script. The fix was the documented one: Write the script to a file, then run it. Stray files turned up again, including a terminal-screen dump. Keep checking before committing.
 
+- **Phase 14:**
+  - **The whole browser suite ran out of the auth rate limit** once the axe scan was added (every page load refreshes the token). Fixed with a per-test reset. Don't raise the production limit.
+  - **Dev servers gave false failures:**
+    - Next compiled routes on demand in 10–15 s with under 1 GB of RAM free;
+    - `nest start --watch` restarted mid-run when the fixture script ran in the backend folder.
+    - Run the gate suite on production builds (see `CLAUDE.md`).
+  - **A second Playwright run was started while an earlier one was still running.** They shared `.fixture.json`, and one run's teardown could delete the other's data. Stop every runner (and tear down leftover fixtures with `scripts/e2e-portal-fixture.ts teardown <runId>`) before starting another.
+  - **Prettier was run on existing e2e files and reflowed them to a narrower width** (the documented lesson again). Reverted with `git checkout`, and only the intended edits re-applied. **Run Prettier on new files only.**
+  - **The first `--danger-foreground` edit put the dark value into the wrong block** (a substring match hit the indented copy). The contrast test's "dark blocks match" check caught it.
+  - **Empty stray files appeared again** from shell quoting (`%6s`, `->` in an awk format). Checked and removed before finishing.
+
 ## Next Steps
 
-1. **Ask the user whether to commit Phase 13B.** From the repo root, after the empty-file check (`find . -maxdepth 4 -type f -empty -not -path '*/node_modules/*' -not -path './.git/*' -not -path '*/.next/*' -not -path '*claude-flow*'`):
-   `git add -A -- . ':!**/.claude-flow/**' ':!.claude-flow/**' && git commit -m "feat: Phase 13B — staff workflow screens"`
-2. **Ask whether the five screen gaps come before Phase 14:** the availability editor (FR-APPT-001), vaccinations and family history (FR-EMR-005), attachments (FR-EMR-006), the signature upload (FR-RX-003), and Super Admin hospital onboarding (FR-HOSP-001). If yes:
-   - build them on the 13B patterns (`services/workflows.ts`, `WORKFLOW_ACCESS`, `staff-validation.ts`);
-   - extend `staff-journey.spec.ts` or add journeys;
-   - update `PHASE-13B-REVIEW.md`.
-3. **Wait for "START PHASE 14"** (UI/UX polish). Its inputs from 13B:
-   - trim the form-heavy screens' first load (186–246 kB);
-   - axe scanning;
-   - the §9 checklist across all screens.
-4. **When credentials arrive,** close the provider UNVERIFIED items and update the Phase 10–12 gates.
-5. **Carried debt:**
-   - audit-log writes outside interactive transactions (Phase 15);
+1. **Ask the user whether to commit Phase 14.** From the repo root, after the empty-file check:
+   `git add -A -- . ':!**/.claude-flow/**' ':!.claude-flow/**' && git commit -m "feat: Phase 14 — UI/UX polish"`
+2. **Wait for "START PHASE 15"** (Testing & Hardening: the testing pyramid, the nine mandatory scenarios in CI, the OWASP review, the dependency audit). Inputs:
+   - audit-log writes outside interactive transactions;
+   - the attachment confirm-upload step;
    - Socket.IO handshake rate limiting;
    - provider error-classification tests;
-   - Playwright in CI (Phase 16);
-   - analytics caching (measure first, Phase 14);
-   - the copied appointment state machine (serve allowed actions from the API).
+   - serving allowed appointment actions from the API.
+3. **For any browser-suite run,** use production builds: rebuild the web image after frontend changes, and `pnpm run build` for the API.
+4. **When credentials arrive,** close the provider UNVERIFIED items.
 
 ## Important Commands, Paths, and Gotchas
 
@@ -329,30 +358,41 @@ pnpm exec dotenv -e ../../.env -- prisma migrate status
 
 | Check | Status | Notes |
 | --- | --- | --- |
-| Git | UNCOMMITTED | Phase 13 committed (`e6d4a32`). Phase 13B is in the working tree on `master`; strays removed; exclude `.claude-flow/` when staging |
-| Lint | PASS | Backend (src/test/prisma/scripts) and frontend, zero warnings |
+| Git | UNCOMMITTED (Phase 14) | 13 `e6d4a32`, 13B `cfb6944`, follow-up `d320ea2` committed; Phase 14 in the working tree; exclude `.claude-flow/` |
+| Lint | PASS | Backend and frontend, zero warnings |
 | Typecheck | PASS | Backend, frontend (incl. `e2e/`), types |
-| Unit tests | PASS | Backend jest 5/5; frontend Vitest 77/77 |
-| Integration/e2e tests | PASS | Backend 338/338, 17/17 suites, serial; 2 filter mutations caught; limiter now tested |
-| Component tests | PASS | Vitest + Testing Library |
-| Browser E2E (Playwright) | PASS | 35/35 native, after the last UI change, incl. the 13B gate journey; fixture teardown clean (0 `e2e-*` users) |
-| Build | PASS | Frontend production image (46 routes); API image |
-| DB migrations | NOT APPLICABLE | No schema change in Phase 13B; `20260926090000_patient_portal` is still the latest |
-| Docker | PARTIAL | Images built; containers not started this phase (memory). Phase 12 container run verified end to end |
-| Security review | PASS | Tenancy both ways on every new read; role matrices; scope-narrowing filters; minimised fields; UI access mirrors refuse and the API refuses independently |
+| Unit tests | PASS | Backend 5/5; frontend Vitest 140/140 (59 contrast checks) |
+| Integration/e2e tests | PASS | Backend 346/346, 18/18 suites |
+| Browser E2E (Playwright) | PASS | 47/47 against production builds, incl. the axe scan (all screens, both themes) and keyboard tests; fixtures cleaned |
+| Accessibility | PASS | axe WCAG 2.1 A/AA clean; token contrast test; keyboard/focus tests |
+| Build | PASS | Frontend production image (largest first load 207 kB); backend `nest build` |
+| DB migrations | NOT APPLICABLE | No schema change since Phase 12 |
+| Docker | PARTIAL | Images built; the compose stack not started this phase (the web image ran standalone for the browser tests) |
+| Security review | PASS | No auth/tenancy change; test-only limiter reset; dev-only axe dependency |
 | Live Stripe/Razorpay checkout | UNVERIFIED | No test keys |
 | Live Resend/Twilio sends | UNVERIFIED | No credentials |
 
 ## Current Phase Gate
 
-**Phase 13B — Staff Workflow Screens: PASS WITH DOCUMENTED MINOR ISSUES.** Full detail in `docs/phase-reviews/PHASE-13B-REVIEW.md`.
-- Every screen in the plan's 13B list is built and wired to the real API.
-- The gate journey (registration through portal visibility, four-eyes lab approval, automatic billing, cash payment) passes in the browser.
-- No critical or high-severity defect is open.
-- The minor items are the five API-complete requirements without a screen (for the user to schedule), documented scope choices, and the carried provider items.
+**Phase 14 — UI/UX Polish: PASS WITH DOCUMENTED MINOR ISSUES** (uncommitted). Full detail in `docs/phase-reviews/PHASE-14-REVIEW.md`. `NFR-A11Y-001..004` and `NFR-PERF-003` are verified by checks that run with the suite. Minor items: native time inputs display in the browser's locale; the zod chunk remains; carried items.
+
+Earlier this session: Phase 13B PASS WITH DOCUMENTED MINOR ISSUES (committed `cfb6944` + follow-up `d320ea2`).
 
 ## Important Decisions / Context
 
+- **D-043 (Phase 14):**
+  - contrast enforced by a test;
+  - axe on every screen;
+  - dialog focus return via a hook (not by editing `components/ui`);
+  - the tablet rail;
+  - CSS-only motion, framer-motion removed;
+  - capped (not paginated) patient clinical lists;
+  - browser-suite limiter reset and production-build gate runs.
+- **D-042 (13B follow-up):**
+  - bucket CORS (browser uploads were broken since Phase 6);
+  - `POST /hospitals/:id/admins`;
+  - schedule read and delete;
+  - the overlap rule.
 - **D-041 (Phase 13B):**
   - the new reads, narrowing filters, and response fields;
   - `WORKFLOW_ACCESS` mirroring;

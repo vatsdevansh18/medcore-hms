@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, use, useEffect, useRef, useState } from "react";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, CreditCard, Info, Loader2, Smartphone } from "lucide-react";
 import { InvoiceStatus, PaymentProvider, PaymentStatus, type InvoiceView } from "@medcore/types";
@@ -73,9 +74,10 @@ function PayDialog({ invoice, open, onOpenChange }: { invoice: InvoiceView; open
     { value: PaymentProvider.RAZORPAY, label: "UPI / Netbanking", hint: "Razorpay", icon: Smartphone },
   ];
 
+  const returnFocus = useReturnFocus(open);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onCloseAutoFocus={returnFocus}>
         <DialogTitle>Pay {formatMoney(invoice.balanceDue, invoice.currency)}</DialogTitle>
         <DialogDescription>
           You&apos;ll finish paying on the provider&apos;s secure page. We confirm the payment with them directly, which

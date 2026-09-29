@@ -1,5 +1,10 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { api, loadFixture, login, type PortalFixture } from "./fixture";
+import { api, loadFixture, login, type PortalFixture, resetRateLimits } from "./fixture";
+
+// Each test starts with fresh rate-limit counters (see resetRateLimits).
+test.beforeEach(async () => {
+  await resetRateLimits();
+});
 
 /**
  * Phase 13B follow-up (D-042): the last five screens, through the UI.

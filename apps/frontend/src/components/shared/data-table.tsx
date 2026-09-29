@@ -50,7 +50,13 @@ export function DataTable<T>({
   const hide = (c: Column<T>) => (c.hideOnMobile ? "hidden sm:table-cell" : "");
   return (
     <div>
-      <div className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-surface">
+      {/* Focusable so keyboard users can scroll it (WCAG 2.1.1); named by the caption. */}
+      <div
+        className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-surface"
+        tabIndex={0}
+        role="region"
+        aria-label={caption}
+      >
         <table className="w-full text-sm">
           <caption className="sr-only">{caption}</caption>
           <thead className="sticky top-0 z-10 bg-surface-muted text-left text-muted">

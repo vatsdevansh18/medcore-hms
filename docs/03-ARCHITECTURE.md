@@ -82,6 +82,8 @@ Folder structure and component strategy are detailed in `04-UI-UX.md`.
 - Lists use the shared `DataTable` (sticky header, server pagination, loading/empty/error states) with filters kept in the URL (`useUrlFilters`), so dashboard "view all" links open pre-filtered lists.
 - Chart data transforms are plain functions (`lib/chart-data.ts`); every chart has a text summary in its `figcaption`.
 
+**As implemented in Phase 14** (polish, D-043): motion is CSS keyframes only (no animation library); the shell has a skip link and a tablet icon rail; dialogs restore focus through `hooks/use-return-focus.ts`; `Panel` is a named region.
+
 **As implemented in Phase 13B** (staff workflow screens, D-041):
 - Each workflow is a screen under `app/(dashboard)/dashboard/` (patients, appointments, encounters, lab orders, prescriptions, medicines, invoices, staff, departments, settings), reached from the sidebar or from a row in a Phase 13 list or dashboard panel.
 - Reads and writes live in `services/workflows.ts` (TanStack Query). Each mutation invalidates the query families its result can change, so a dispense refreshes the queue, stock, and bill views.

@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { AppointmentView, SlotView } from "@medcore/types";
@@ -73,9 +74,10 @@ function RescheduleDialog({ appointment, open, onOpenChange }: { appointment: Ap
       setSlot(null);
     }
   }
+  const returnFocus = useReturnFocus(open);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" onCloseAutoFocus={returnFocus}>
         <DialogTitle>Choose a new time</DialogTitle>
         <DialogDescription>
           Same doctor. {appointment.status === AppointmentStatus.CONFIRMED

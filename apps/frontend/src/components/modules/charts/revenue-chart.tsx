@@ -17,7 +17,7 @@ export function RevenueChart({ trend, height = 260 }: { trend: RevenueTrend; hei
       </figcaption>
       <div style={{ height }} aria-hidden="true">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+          <AreaChart accessibilityLayer={false} data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: "var(--muted)", fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={16} />
             <YAxis
