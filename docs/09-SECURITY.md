@@ -35,7 +35,7 @@
 
 ## 4. Authorization (`SEC-AUTHZ`)
 
-- **SEC-AUTHZ-001** — Every controller method carries an explicit `@Roles()` decorator; CI includes a static check that fails the build if a new controller method is added without one (implemented as a lint rule or a test that reflects over all routes).
+- **SEC-AUTHZ-001** — Every controller method carries an explicit `@Roles()` decorator; CI includes a static check that fails the build if a new controller method is added without one (`test/route-authorization.e2e-spec.ts`, added Phase 15 — `11-DECISIONS.md` D-044). This is in addition to, not instead of, `RolesGuard`'s runtime deny-by-default (any route with neither `@Roles()` nor `@Public()` is refused at request time regardless of what CI caught).
 - **SEC-AUTHZ-002** — `RolesGuard` is applied globally (`APP_GUARD`), not opt-in per module — a forgotten guard import can never leave a route unprotected.
 - **SEC-AUTHZ-003** — Authorization decisions are made from the JWT's claims only; a request body or query parameter can never widen the caller's effective role or scope.
 
@@ -56,8 +56,8 @@
 ## 7. Input Validation & Injection Prevention (`SEC-INPUT`)
 
 - **SEC-INPUT-001** — All DTOs validated with `class-validator`/`class-transformer`, `whitelist + forbidNonWhitelisted` enabled globally.
-- **SEC-INPUT-002** — All database access goes through Prisma's parameterised query builder; `$queryRawUnsafe` with any interpolated value is forbidden by convention and code review — the only raw SQL in the codebase is the fixed, non-parameterised exclusion-constraint DDL in a migration file.
-- **SEC-INPUT-003** — Any user-supplied HTML/rich text (e.g. treatment plan notes rendered back to the UI) is sanitised with DOMPurify on render; the API never trusts the frontend to have sanitised on the way in.
+- **SEC-INPUT-002** — All database access goes through Prisma's parameterised query builder or its parameterised tagged-template `$queryRaw`/`$executeRaw` (`Prisma.join(...)` for `IN` lists); `$queryRawUnsafe`/`$executeRawUnsafe` with any interpolated value is forbidden by convention and code review, and (Phase 15 audit, `11-DECISIONS.md` D-044) confirmed absent from the codebase entirely — every raw-SQL call site uses the tagged-template form. The only *non-parameterised* SQL is the fixed exclusion-constraint DDL in a migration file, which takes no runtime input.
+- **SEC-INPUT-003** — Clinical free text (treatment plan notes, addenda, etc.) is rendered by React's default JSX text interpolation, never `dangerouslySetInnerHTML`, so it is never treated as HTML in the first place — a stricter guarantee than sanitising-then-rendering. (Phase 15 audit: the frontend's one `dangerouslySetInnerHTML` call is the dark-mode theme-flash script, a fixed developer-written constant, never user input.) DOMPurify is added if a future feature deliberately renders user-authored rich text as HTML; the API never trusts the frontend to have sanitised on the way in regardless.
 - **SEC-INPUT-004** — Zod schemas mirror backend DTOs on the frontend for early feedback, but are never treated as a security boundary — the backend re-validates unconditionally.
 
 ## 8. Network & Transport (`SEC-NET`)
@@ -78,7 +78,7 @@
 - **SEC-FILE-001** — Uploads validated by both MIME type and file extension against an allow-list (`image/jpeg`, `image/png`, `application/pdf`, and a small set of document types) — executable and script-like extensions are rejected outright regardless of claimed MIME type.
 - **SEC-FILE-002** — Size capped at 20 MB per EMR attachment, per the brief; smaller caps apply to profile images.
 - **SEC-FILE-003** — Files are stored in a private S3 bucket; access is via short-lived pre-signed URLs generated per request, never a public bucket policy. The bucket's CORS rule allows only the web app's origin(s), PUT and GET only, so a pre-signed URL can be used from the MedCore web app and not from another site (D-042; the dev bucket gets it at API start, production from infrastructure).
-- **SEC-FILE-004** — A ClamAV scan step is documented as the production-hardening target for Phase 15/16; if infrastructure constraints prevent standing up ClamAV within the project timeline, this is logged as a documented, accepted risk in that phase's review — not silently dropped.
+- **SEC-FILE-004** — A ClamAV scan step is documented as the production-hardening target for Phase 15/16. **Deferred to Phase 16** as the documented, accepted risk this entry anticipates: the Phase 15 dev machine has ~5.5 GB free RAM under the normal stack, a ClamAV sidecar needs roughly another 1–1.5 GB once signatures load, and a correct scan-then-quarantine implementation (with its own EICAR-file negative test) is a full feature, not a config change, to start this late in the project. See `11-DECISIONS.md` D-044; Phase 16's provisioned infrastructure is the intended point to add it.
 - **SEC-FILE-005** (Phase 12) — S3 storage keys never appear in an API response (doctor signatures, prescription PDFs, EMR attachments, lab report files, receipts); clients reach files only through per-request pre-signed URLs. URLs for clients are signed for the address the client uses (`S3_PUBLIC_ENDPOINT` when it differs from the API's own `S3_ENDPOINT`, as in Docker dev); URLs fetched by the server itself are signed for the internal address and never returned (`11-DECISIONS.md` D-036).
 
 ## 11. Payment Security (`SEC-PAY`)
@@ -100,6 +100,7 @@
 
 - `pnpm audit` (or equivalent) runs in CI; high/critical vulnerabilities in direct dependencies block merge unless explicitly waived with a documented reason and follow-up.
 - Dependency additions are evaluated against the seven questions in the master build prompt §11 before being introduced (necessity, overlap, maintenance status, quality benefit, complexity cost, bundle/perf impact, stack compatibility).
+- **Phase 15 audit (`11-DECISIONS.md` D-044):** 43 advisories found, all transitive (none in either `package.json` directly), each traced with `pnpm why -r` and assessed for actual exploitability in this deployment — install-time-only, dev-tooling-only, gated behind Bull Board's off-by-default Basic Auth, or (multer) a code path never wired to any route. One, `@nestjs/core`, does apply to the pinned version and needs a v10→v11 framework-wide major upgrade; deferred as an accepted risk rather than attempted piecemeal, since Nest's peer dependencies pin the whole v10 family together.
 
 ## 13. Security Review Cadence
 

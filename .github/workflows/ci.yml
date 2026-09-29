@@ -94,6 +94,22 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # Attachment/upload specs (medical-records, portal, onboarding-schedule)
+      # round-trip real bytes through S3 and check the dev bucket's CORS rule
+      # (docs/11-DECISIONS.md D-015/D-042) — without this service those specs
+      # fail with connection errors, not skips.
+      localstack:
+        image: localstack/localstack:3
+        env:
+          SERVICES: s3
+          DEFAULT_REGION: ap-south-1
+        ports:
+          - 4566:4566
+        options: >-
+          --health-cmd "curl -sf http://localhost:4566/_localstack/health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - uses: actions/checkout@v4
 
@@ -109,6 +125,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ts-node (`prisma migrate deploy` isn't affected, but the e2e run
+      # below is) resolves @medcore/types as compiled JS, not raw TS — its
+      # dist/ is gitignored and does not exist on a fresh checkout.
+      - name: Build shared types
+        run: pnpm --filter=@medcore/types run build
+
       - name: Apply database migrations
         working-directory: apps/backend
         env:
@@ -121,4 +143,15 @@ jobs:
           DATABASE_URL: postgresql://medcore:medcore@localhost:5432/medcore_hms_test
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
+          CORS_ORIGIN: http://localhost:3000
+          # CI-only dummy secrets (never real credentials) — required by
+          # src/config/env.validation.ts with no default, so the app fails
+          # closed at boot without them rather than falling back insecurely.
+          JWT_ACCESS_SECRET: 6deb9c230925452355b48dace7cc7f2012edbc27e459ff40999e5aab90225249
+          ENCRYPTION_KEY: 8c721df8b2b59ebd90d8a4fe398d2ad5c6713ce6489f671bfc37bf72a8000704
+          AWS_REGION: ap-south-1
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_S3_BUCKET: medcore-hms-attachments
+          S3_ENDPOINT: http://localhost:4566
         run: pnpm exec jest --config ./test/jest-e2e.json

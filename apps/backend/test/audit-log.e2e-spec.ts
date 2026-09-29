@@ -113,6 +113,44 @@ describe("Audit log extension (e2e)", () => {
     expect((updateEntry!.afterData as { name?: string } | null)?.name).toBe("Radiology (Renamed)");
   });
 
+  // KNOWN LIMITATION (docs/phase-reviews/PHASE-9-REVIEW.md Technical Debt,
+  // investigated but not fixed in Phase 15 — see docs/11-DECISIONS.md D-044):
+  // the audit-log extension writes through the root Prisma client, not the
+  // interactive-transaction client, so its AuditLog row survives a rollback
+  // of the transaction that produced it. `test.failing` documents this as an
+  // active tripwire — this test must start FAILING (proving the bug is
+  // fixed) before anyone removes `.failing`; if it ever starts passing
+  // un-flagged, the suite fails loudly rather than silently losing coverage.
+  test.failing(
+    "rolls back its AuditLog row with the transaction that wrote it",
+    async () => {
+      const deptName = "Rollback Audit Test";
+      let createdId: string | undefined;
+
+      await expect(
+        prisma.$transaction((tx) =>
+          TenantContext.run({ hospitalId, userId: actingUserId, bypassTenancy: false }, async () => {
+            const department = await tx.department.create({ data: { hospitalId, name: deptName } });
+            createdId = department.id;
+            throw new Error("force rollback after the audited write");
+          }),
+        ),
+      ).rejects.toThrow("force rollback");
+
+      expect(createdId).toBeDefined();
+
+      const department = await TenantContext.bypass(() =>
+        prisma.department.findUnique({ where: { id: createdId! } }),
+      );
+      expect(department).toBeNull(); // sanity check: the transaction really rolled back
+
+      const auditEntries = await TenantContext.bypass(() =>
+        prisma.auditLog.findMany({ where: { entityType: "Department", entityId: createdId! } }),
+      );
+      expect(auditEntries).toHaveLength(0);
+    },
+  );
+
   it("does not recursively audit its own AuditLog writes", async () => {
     const before = await TenantContext.bypass(() =>
       prisma.auditLog.count({ where: { hospitalId } }),

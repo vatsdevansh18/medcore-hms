@@ -108,6 +108,22 @@ export const auditLogExtension = Prisma.defineExtension((client) =>
           // Record<string, unknown> explicitly for this intentionally generic code.
           const argsRecord = args as unknown as Record<string, unknown>;
 
+          // Known limitation, investigated in Phase 15 (docs/phase-reviews/
+          // PHASE-9-REVIEW.md Technical Debt, carried through Phase 14 —
+          // see docs/11-DECISIONS.md D-044 for the full investigation): the
+          // outer `client` closed over by `Prisma.defineExtension` is always
+          // the root client, never the interactive-transaction client, so an
+          // audit write made through it does not roll back with the
+          // caller's `$transaction(async (tx) => ...)`. `Prisma.getExtensionContext(this)`
+          // was tried as the fix, but Prisma 5's query-extension `this` is
+          // not a client reference here (confirmed empirically — it's an
+          // array-like object, not the extended client), and `QueryOptionsCbArgs`
+          // exposes no other handle to the current transactional client. A
+          // real fix needs the ~15 call sites that write audited models
+          // inside `$transaction` to pass `tx` to an explicit audit-write
+          // helper instead of relying on this automatic extension — out of
+          // scope for this pass; `test/audit-log.e2e-spec.ts` documents the
+          // gap with a `test.failing` tripwire.
           if (BULK_WRITE_OPS.has(operation)) {
             const result = await query(args);
             await TenantContext.run(effectiveStore, () =>
