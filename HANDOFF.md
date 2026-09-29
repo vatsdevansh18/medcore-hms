@@ -19,13 +19,17 @@ Prior instruction: "Do step 1 then step 2 then continue with START PHASE 14". So
 2. The five missing screens were built as a 13B follow-up (D-042) and committed (`d320ea2`).
 3. **Phase 14 (UI/UX polish) was built and gated PASS WITH DOCUMENTED MINOR ISSUES.** See `docs/phase-reviews/PHASE-14-REVIEW.md`.
 
-**This session:** resumed with no code changes pending beyond the uncommitted Phase 14 diff. User asked to re-verify before committing. Docker Desktop's engine was not running this session, so the backend e2e suite, Playwright, and production-image builds could **not** be re-run — those results (338/338 backend e2e, 47/47 Playwright, both prod images) are carried over unverified-this-session from the prior session's numbers above. What **was** re-run this session, against the exact same working tree, all passing clean:
-- frontend: `tsc --noEmit`, `eslint --max-warnings=0`, Vitest 140/140.
-- backend: `tsc --noEmit`, `eslint --max-warnings=0`, Jest unit 5/5.
+**This session:** resumed with no code changes pending beyond the uncommitted Phase 14 diff. User asked to re-verify before committing. Docker Desktop's engine was not running at first, so only typecheck/lint/unit could run initially — frontend `tsc --noEmit`/`eslint --max-warnings=0`/Vitest 140/140, backend `tsc --noEmit`/`eslint --max-warnings=0`/Jest unit 5/5, all clean, on the exact same working tree. User said to commit on that basis; **Phase 14 was committed as `6146fa0`**, followed by a `HANDOFF.md`-only commit (`db48ff8`).
 
-User then said to commit on that basis. **Phase 14 is now committed as `6146fa0`.**
+User then said "continue" and, when asked, chose to start Docker Desktop and fully re-run e2e/Playwright/build rather than leave them carried-over-unverified. Docker Desktop was launched (`Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"`); its engine came up in ~5s and `postgres`/`redis`/`localstack` auto-started and reported healthy within ~15s (they'd been left running by a prior Docker Desktop session, per its restart policy). With ports 3000/3001 confirmed free first, this session then ran, and closed out cleanly:
+- backend e2e: **346/346, 18/18 suites** (`pnpm run test:e2e` in `apps/backend`) — matches the Phase 14 review's own numbers exactly.
+- backend production build (`pnpm run build`) **PASS**; started with `pnpm exec dotenv -e ../../.env -- node dist/main.js` on :3001, confirmed healthy via `GET /health`.
+- frontend production image (`docker build -f infrastructure/docker/Dockerfile.frontend --target runtime -t medcore-hms-frontend-prod .`) **PASS**, run as a container (`docker run -d --name medcore-web-e2e -p 3000:3000 -e HOSTNAME=0.0.0.0 ...`).
+- Playwright against both production servers: **47/47 passed (4.7m)** — all of `accessibility.spec.ts`, `dashboards.spec.ts`, `portal.spec.ts`, `practice-onboarding.spec.ts`, `staff-journey.spec.ts`, `mobile.spec.ts`.
 
-Current objective: **wait for the user** to say "START PHASE 15" (Testing & Hardening). Before then, if e2e/Playwright/build needs a real re-run (e.g. before starting Phase 15), Docker Desktop must be started first — its engine was down at the end of this session.
+Afterward the `medcore-web-e2e` container was stopped and removed, and the native backend process (PID 1203) was killed; `postgres`/`redis`/`localstack` were left running. **Every number in the "Phase 14 verified" block below is now independently reconfirmed this session, not carried over.**
+
+Current objective: **wait for the user** to say "START PHASE 15" (Testing & Hardening).
 
 ## Current State
 
@@ -58,7 +62,7 @@ Current objective: **wait for the user** to say "START PHASE 15" (Testing & Hard
 - the doctor's signature upload (FR-RX-003);
 - Super Admin hospital onboarding (FR-HOSP-001).
 
-**Environment right now (end of this session):** Docker Desktop's engine was not running at all this session (`docker ps` failed with "cannot find the path specified" / daemon not reachable) — Postgres, Redis, and LocalStack were not verified up or down; nothing was started or stopped this session, no native dev servers were touched. Next session must start Docker Desktop and confirm container state from scratch before any e2e/Playwright/build work.
+**Environment right now (end of this session):** Docker Desktop is running; `postgres`, `redis`, and `localstack` containers are up and healthy. The `medcore-web-e2e` frontend container was removed after the Playwright run. Ports 3000/3001 are free (backend production process stopped). The `medcore-hms-frontend-prod` image remains built locally (339MB) if a quick rerun is wanted without rebuilding.
 
 **Environment (earlier in the session):**
 - `postgres`, `redis`, `localstack` containers are running; `api`/`frontend` containers are stopped (images rebuilt this phase).
