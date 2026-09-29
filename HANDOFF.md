@@ -14,12 +14,18 @@ Building **MedCore HMS**, a multi-tenant Hospital Management SaaS platform, as a
 - earlier session: Phases 11 and 12 committed; Phase 13 built and gated;
 - this session: the user said "continue" and chose "rerun, commit, then 13B". Phase 13 was committed as `e6d4a32` (its Playwright rerun first skipped because another project held port 3001), then **Phase 13B was built and gated PASS WITH DOCUMENTED MINOR ISSUES**.
 
-Latest instruction (this session): "Do step 1 then step 2 then continue with START PHASE 14". So:
+Prior instruction: "Do step 1 then step 2 then continue with START PHASE 14". So:
 1. Phase 13B was committed (`cfb6944`).
 2. The five missing screens were built as a 13B follow-up (D-042) and committed (`d320ea2`).
-3. **Phase 14 (UI/UX polish) was built and gated PASS WITH DOCUMENTED MINOR ISSUES.** See `docs/phase-reviews/PHASE-14-REVIEW.md`. **It is NOT committed:** the instruction authorized committing 13B only.
+3. **Phase 14 (UI/UX polish) was built and gated PASS WITH DOCUMENTED MINOR ISSUES.** See `docs/phase-reviews/PHASE-14-REVIEW.md`.
 
-Current objective: **wait for the user.** Ask whether to commit Phase 14, then wait for "START PHASE 15" (Testing & Hardening).
+**This session:** resumed with no code changes pending beyond the uncommitted Phase 14 diff. User asked to re-verify before committing. Docker Desktop's engine was not running this session, so the backend e2e suite, Playwright, and production-image builds could **not** be re-run — those results (338/338 backend e2e, 47/47 Playwright, both prod images) are carried over unverified-this-session from the prior session's numbers above. What **was** re-run this session, against the exact same working tree, all passing clean:
+- frontend: `tsc --noEmit`, `eslint --max-warnings=0`, Vitest 140/140.
+- backend: `tsc --noEmit`, `eslint --max-warnings=0`, Jest unit 5/5.
+
+User then said to commit on that basis. **Phase 14 is now committed as `6146fa0`.**
+
+Current objective: **wait for the user** to say "START PHASE 15" (Testing & Hardening). Before then, if e2e/Playwright/build needs a real re-run (e.g. before starting Phase 15), Docker Desktop must be started first — its engine was down at the end of this session.
 
 ## Current State
 
@@ -30,7 +36,7 @@ Current objective: **wait for the user.** Ask whether to commit Phase 14, then w
   - Live Resend/Twilio: UNVERIFIED (no credentials).
   - Phase 13's UNVERIFIED Playwright rerun is **closed** (35/35 this session).
 
-**Git:** this session committed Phase 13 (`e6d4a32`), Phase 13B (`cfb6944`), and the 13B follow-up (`d320ea2`). **Phase 14 is uncommitted** in the working tree. Exclude `.claude-flow/` when staging.
+**Git:** an earlier session committed Phase 13 (`e6d4a32`), Phase 13B (`cfb6944`), and the 13B follow-up (`d320ea2`). **This session committed Phase 14 as `6146fa0`.** Exclude `.claude-flow/` when staging — it's untracked cruft from a claude-flow/ruflo plugin scattered across the tree, not project output.
 
 **Phase 14 verified, after the last change:**
 - frontend typecheck and lint PASS; Vitest 140/140 (59 contrast checks);
@@ -52,7 +58,7 @@ Current objective: **wait for the user.** Ask whether to commit Phase 14, then w
 - the doctor's signature upload (FR-RX-003);
 - Super Admin hospital onboarding (FR-HOSP-001).
 
-**Environment right now (after Phase 14):** all MedCore servers are stopped; ports 3000/3001 are free; the `medcore-web-e2e` container was removed. Postgres, Redis, and LocalStack containers are running. task_2 is still stopped (the user restarts it).
+**Environment right now (end of this session):** Docker Desktop's engine was not running at all this session (`docker ps` failed with "cannot find the path specified" / daemon not reachable) — Postgres, Redis, and LocalStack were not verified up or down; nothing was started or stopped this session, no native dev servers were touched. Next session must start Docker Desktop and confirm container state from scratch before any e2e/Playwright/build work.
 
 **Environment (earlier in the session):**
 - `postgres`, `redis`, `localstack` containers are running; `api`/`frontend` containers are stopped (images rebuilt this phase).
