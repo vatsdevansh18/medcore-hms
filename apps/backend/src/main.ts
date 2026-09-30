@@ -5,6 +5,13 @@ import { ConfigService } from "@nestjs/config";
 import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module";
 import { configureApp } from "./common/bootstrap/configure-app";
+import { initSentry, installProcessErrorHandlers } from "./common/observability/sentry";
+
+// Before anything else: Sentry must be initialised before Nest (or any of
+// its providers) can throw, and the process-level nets must be armed before
+// the event loop starts taking real work.
+initSentry();
+installProcessErrorHandlers();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });

@@ -5,6 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+    tags: ["v*"]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -13,6 +14,9 @@ concurrency:
 env:
   PNPM_VERSION: 9.15.4
   NODE_VERSION: 20
+  # ghcr.io needs no separate registry account/secret — it authenticates
+  # with the workflow's own built-in GITHUB_TOKEN (docs/13-DEPLOYMENT-RUNBOOK.md).
+  IMAGE_NAME: ghcr.io/${{ github.repository }}/api
 
 jobs:
   lint-typecheck-build:
@@ -155,3 +159,91 @@ jobs:
           AWS_S3_BUCKET: medcore-hms-attachments
           S3_ENDPOINT: http://localhost:4566
         run: pnpm exec jest --config ./test/jest-e2e.json
+
+  # docs/03-ARCHITECTURE.md §15: "On merge to main: ... then Docker image
+  # build." Runs on every main push (so `latest` always reflects main) and
+  # on a version tag (so a release has its own immutable, deployable image).
+  # Gated implicitly: ghcr.io push needs the repository's Packages write
+  # permission, on by default for GITHUB_TOKEN in a repo the user owns — no
+  # separate account/secret needed, unlike every other Phase 16 provider.
+  docker-build:
+    name: Build & push API image
+    runs-on: ubuntu-latest
+    needs: [lint-typecheck-build, unit-tests]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: infrastructure/docker/Dockerfile.backend
+          target: runtime
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # docs/03-ARCHITECTURE.md §11/§15: "On release tag: deploy to production
+  # with a health-check gate before traffic cutover." Needs EC2_HOST,
+  # EC2_SSH_USER, and EC2_SSH_KEY repo secrets (docs/13-DEPLOYMENT-RUNBOOK.md)
+  # — none of which exist yet, so this job fails closed (never silently
+  # skips or fakes success) until the host is provisioned and the secrets
+  # are added, matching every other external-provider UNVERIFIED item in
+  # this project.
+  deploy:
+    name: Deploy to production (blue-green)
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    environment: production
+    steps:
+      - uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Deploy via blue-green cutover
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          IMAGE_TAG: ${{ needs.docker-build.outputs.image_tag }}
+          # Read from env, never interpolated as `${{ github.ref_name }}`
+          # directly into the shell script below — a ref/tag name is
+          # attacker-influenceable text and `${{ }}` expansion happens
+          # before the shell ever sees the line, so unescaped interpolation
+          # there is a script-injection vector (GitHub's own hardening
+          # guidance). Validated against the release-tag pattern below
+          # before it's ever passed to `git checkout` or ssh.
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          case "$REF_NAME" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "Refusing unexpected ref: $REF_NAME" >&2; exit 1 ;;
+          esac
+          ssh -o StrictHostKeyChecking=accept-new "$EC2_SSH_USER@$EC2_HOST" \
+            "cd /opt/medcore-hms && git fetch --tags && git checkout -- \"$REF_NAME\" && \
+             docker compose -f docker-compose.prod.yml pull api-blue && \
+             scripts/deploy/blue-green.sh \"$IMAGE_TAG\""

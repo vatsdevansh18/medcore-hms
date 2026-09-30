@@ -1,5 +1,6 @@
 import { Inject, Logger } from "@nestjs/common";
-import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Processor } from "@nestjs/bullmq";
+import { SentryReportingWorkerHost } from "../common/observability/sentry-worker.base";
 import type { Job } from "bullmq";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
 import type { ExtendedPrismaClient } from "../prisma/prisma-client.factory";
@@ -20,7 +21,7 @@ const PRESCRIPTION_INCLUDE = {
  * (same pattern as `AppointmentReminderProcessor`) — no per-request caller,
  * so it reads across hospitals via `TenantContext.bypass()`. */
 @Processor(PRESCRIPTION_PDF_QUEUE)
-export class PrescriptionPdfProcessor extends WorkerHost {
+export class PrescriptionPdfProcessor extends SentryReportingWorkerHost {
   private readonly logger = new Logger(PrescriptionPdfProcessor.name);
 
   constructor(

@@ -9,6 +9,7 @@ import {
 import type { Response } from "express";
 import { ApiErrorCode, type ApiError } from "@medcore/types";
 import { AppException } from "../errors/app-exception";
+import { Sentry } from "../observability/sentry";
 
 const STATUS_TO_CODE: Partial<Record<number, ApiErrorCode>> = {
   [HttpStatus.BAD_REQUEST]: ApiErrorCode.VALIDATION_ERROR,
@@ -40,6 +41,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     if (status >= 500) {
       this.logger.error({ err: exception, code }, "Unhandled exception");
+      Sentry.captureException(exception);
     } else {
       this.logger.warn({ code, message }, "Request error");
     }

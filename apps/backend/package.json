@@ -41,6 +41,7 @@
     "@nestjs/throttler": "^6.7.1",
     "@nestjs/websockets": "^10.4.22",
     "@prisma/client": "^5.22.0",
+    "@sentry/node": "^11.1.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "bcrypt": "^5.1.1",
     "bullmq": "^6.3.9",
@@ -103,6 +104,9 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "transformIgnorePatterns": [
+      "/node_modules/(?!.*(@nestjs\\+bullmq|@nestjs\\+bull-shared|@nestjs/bullmq|@nestjs/bull-shared))"
+    ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],

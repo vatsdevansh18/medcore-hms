@@ -1,5 +1,6 @@
 import { Logger } from "@nestjs/common";
-import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Processor } from "@nestjs/bullmq";
+import { SentryReportingWorkerHost } from "../common/observability/sentry-worker.base";
 import type { Job } from "bullmq";
 import { ExpiryScanService } from "../medicines/expiry-scan.service";
 import { MEDICINE_EXPIRY_SCAN_QUEUE } from "./queue.constants";
@@ -7,7 +8,7 @@ import { MEDICINE_EXPIRY_SCAN_QUEUE } from "./queue.constants";
 /** FR-PHARM-003/005 nightly job. All the work (and its idempotency) lives
  * in `ExpiryScanService`; this only adapts it to BullMQ. */
 @Processor(MEDICINE_EXPIRY_SCAN_QUEUE)
-export class MedicineExpiryScanProcessor extends WorkerHost {
+export class MedicineExpiryScanProcessor extends SentryReportingWorkerHost {
   private readonly logger = new Logger(MedicineExpiryScanProcessor.name);
 
   constructor(private readonly expiryScan: ExpiryScanService) {

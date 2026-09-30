@@ -1,5 +1,6 @@
 import { Inject, Logger } from "@nestjs/common";
-import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Processor } from "@nestjs/bullmq";
+import { SentryReportingWorkerHost } from "../common/observability/sentry-worker.base";
 import type { Job } from "bullmq";
 import { AppointmentStatus, NotificationType } from "@medcore/types";
 import { PRISMA_CLIENT } from "../prisma/prisma.module";
@@ -14,7 +15,7 @@ import { doctorName, formatHospitalTime } from "../notifications/notification-fo
  * via `TenantContext.bypass()` — the same documented escape hatch seed
  * scripts use, never a request handler's pattern. */
 @Processor(APPOINTMENT_REMINDER_QUEUE)
-export class AppointmentReminderProcessor extends WorkerHost {
+export class AppointmentReminderProcessor extends SentryReportingWorkerHost {
   private readonly logger = new Logger(AppointmentReminderProcessor.name);
 
   constructor(

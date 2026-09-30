@@ -174,6 +174,13 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   BULL_BOARD_PASSWORD: string = "";
+
+  // Phase 16: error reporting (docs/03-ARCHITECTURE.md §14). Optional, like
+  // every other external provider here — unset disables Sentry entirely
+  // rather than crashing the app (src/common/observability/sentry.ts).
+  @IsOptional()
+  @IsString()
+  SENTRY_DSN_BACKEND: string = "";
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

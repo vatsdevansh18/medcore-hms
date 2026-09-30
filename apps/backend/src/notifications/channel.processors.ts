@@ -1,8 +1,9 @@
 import type { BeforeApplicationShutdown } from "@nestjs/common";
-import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Processor } from "@nestjs/bullmq";
 import type { Job, Worker } from "bullmq";
 import { ChannelDeliveryService } from "./channel-delivery.service";
 import { EMAIL_QUEUE, IN_APP_QUEUE, SMS_QUEUE, type ChannelJobData } from "./notification.constants";
+import { SentryReportingWorkerHost } from "../common/observability/sentry-worker.base";
 
 /**
  * One worker per channel queue (FR-NOTIF-002, brief §7.8 hint). Each has
@@ -15,7 +16,7 @@ import { EMAIL_QUEUE, IN_APP_QUEUE, SMS_QUEUE, type ChannelJobData } from "./not
  * where @nestjs/bullmq would otherwise close them; a job still running then
  * pushed to a closed Redis connection (found in Phase 11 e2e teardown).
  */
-abstract class ChannelProcessor extends WorkerHost implements BeforeApplicationShutdown {
+abstract class ChannelProcessor extends SentryReportingWorkerHost implements BeforeApplicationShutdown {
   constructor(private readonly delivery: ChannelDeliveryService) {
     super();
   }

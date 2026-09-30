@@ -1,0 +1,86 @@
+name: medcore-hms-prod
+
+# Production topology (docs/03-ARCHITECTURE.md §11): this compose file runs
+# on the EC2 host only — the API, its BullMQ workers (same process, per
+# docs/03-ARCHITECTURE.md §12), and the TLS-terminating Nginx in front of
+# them. Postgres, Redis, and the S3 bucket are managed services (RDS,
+# Upstash, real AWS S3) reached over the network via env vars, never
+# containers here — that's the whole point of moving off docker-compose.yml's
+# dev topology. The frontend is NOT built or served from here: it deploys to
+# Vercel separately (see docs/13-DEPLOYMENT-RUNBOOK.md), which is why there
+# is no `frontend` service and Nginx only proxies API traffic.
+#
+# First-ever bring-up (creates the initial `api-blue` container and starts
+# Nginx pointed at it):
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+# Every deploy AFTER that: `scripts/deploy/blue-green.sh <image-tag>`, never
+# `docker compose up -d api-blue` again — that would recreate the running
+# container in place with no health-check gate before it takes traffic,
+# exactly what blue-green exists to avoid. The script starts the *other*
+# colour (api-green, then api-blue, alternating), health-checks it, flips
+# `infrastructure/nginx/upstream.conf` + reloads Nginx, then drains and
+# stops the previous colour — see that script for the full sequence.
+
+x-api: &api-defaults
+  build:
+    context: .
+    dockerfile: infrastructure/docker/Dockerfile.backend
+    target: runtime
+  restart: unless-stopped
+  env_file:
+    # Real secrets on the EC2 host, gitignored, never committed — see
+    # docs/13-DEPLOYMENT-RUNBOOK.md. `required: false` so this file's
+    # absence (e.g. `docker compose config` in CI, or before the host is
+    # provisioned) doesn't hard-fail; env vars can also come from the
+    # orchestrator directly (AWS Secrets Manager, SSM, etc.) instead.
+    - path: .env.production
+      required: false
+  environment:
+    NODE_ENV: production
+  # No published port: only Nginx (same Docker network) talks to :3001.
+  expose:
+    - "3001"
+  healthcheck:
+    test: ["CMD", "wget", "-qO-", "http://localhost:3001/health/ready"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
+
+services:
+  api-blue:
+    <<: *api-defaults
+    container_name: api-blue
+    image: ${IMAGE_REGISTRY:-medcore-hms}/api:${IMAGE_TAG:-latest}
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/upstream.conf:/etc/nginx/conf.d/upstream.conf
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      api-blue:
+        condition: service_healthy
+
+  # One-shot / periodic, not a long-running daemon — run on demand:
+  #   docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+  #     --webroot -w /var/www/certbot -d api.yourdomain.example --email you@example.com --agree-tos
+  # then reload nginx (`docker compose -f docker-compose.prod.yml exec nginx nginx -s reload`).
+  # Renewal: a host cron/systemd timer re-runs the same `certbot renew` command
+  # (docs/13-DEPLOYMENT-RUNBOOK.md) — Certbot's certificates are valid 90 days.
+  certbot:
+    image: certbot/certbot:latest
+    profiles: ["tools"]
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+
+volumes:
+  certbot_certs:
+  certbot_webroot:

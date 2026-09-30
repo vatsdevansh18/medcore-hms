@@ -40,18 +40,34 @@ Afterward the `medcore-web-e2e` container was stopped and removed, and the nativ
 - Re-verified after every change: backend 448/448 e2e (19 suites), frontend Vitest 140/140, Playwright 47/47 against production containers rebuilt with the updated dependencies.
 - **Phase 15 is not committed yet.**
 
-Current objective: **wait for the user** to say whether to commit Phase 15, then "START PHASE 16" (Deployment & DevOps).
+**Phase 15 was committed as `6f36c82`.** The user then said "COMMIT AND START PHASE 16."
+
+**Phase 16 (Deployment & DevOps) was built and gated PASS WITH DOCUMENTED MINOR ISSUES**, across two sessions (the first stopped mid-work on "exit now" after the Sentry wiring and the blue-green proof; this session resumed, cleaned up the leftover test containers, and finished the rest). See `docs/phase-reviews/PHASE-16-REVIEW.md` for full detail. Before any implementation, the user was asked how to handle real cloud provisioning (AWS/Vercel/Sentry/GitHub remote) and chose: **build everything as ready-to-run, provision nothing live** — matching the Stripe/Twilio/Resend pattern (UNVERIFIED, no live credentials) rather than actually creating billable cloud resources. Summary:
+
+- **Sentry wiring, backend + frontend** (`docs/03-ARCHITECTURE.md` §14): `apps/backend/src/common/observability/{sentry.ts,sentry-worker.base.ts}` (+ unit test, 2/2 pass), wired into `main.ts`, `http-exception.filter.ts` (5xx only), and **all 6 BullMQ processors** now extend `SentryReportingWorkerHost` (captures only once retries are exhausted — the exact "unhandled exceptions ... in BullMQ workers" gap the architecture doc calls out by name). Frontend: `src/instrumentation.ts` + `src/instrumentation-client.ts`, gated by `NEXT_PUBLIC_SENTRY_DSN_FRONTEND` (renamed from `.env.example`'s old `SENTRY_DSN_FRONTEND` — one public var covers server+edge+client, since a DSN isn't a secret). `next.config.ts` deliberately skips `withSentryConfig` (not even exported the documented way in the installed SDK version — `tsc` caught it immediately; source-map upload has no credentials to use anyway). Smoke-tested booting fine with **and** without a (fake) DSN set, in the rebuilt Docker images.
+  - Had to add `transformIgnorePatterns` to the **unit** Jest config in `apps/backend/package.json` (the e2e config already had this fix) — first unit test to transitively pull in `@nestjs/bullmq` (pure ESM), same documented CLAUDE.md gotcha, new location.
+- **`docker-compose.prod.yml`** (new): EC2-side topology — `api-blue` (Dockerfile.backend `runtime` target) + `nginx`, no local Postgres/Redis/S3 (RDS/Upstash/real S3 in prod). No `frontend` service — Vercel deploys that separately.
+- **`infrastructure/nginx/nginx.prod.conf`** (new): TLS (Certbot/Let's Encrypt convention, `api.yourdomain.example` placeholder — **must be changed before real deploy**), HTTP→HTTPS redirect, ACME challenge location, same rate-limit zones as dev. Upstream is `include /etc/nginx/conf.d/upstream.conf` (a separate one-line file) so the blue-green script can flip it without touching the main config.
+- **`scripts/deploy/blue-green.sh`** (new): health-gated cutover. **Proven end-to-end, both directions, against a throwaway test stack** joined to the real dev Docker network (real Postgres/Redis): blue→green and green→blue, each with a concurrent `/health/ready` poll loop running through the entire cutover — **zero failed requests either way**. Test containers cleaned up; `upstream.conf` confirmed back at its committed default.
+- **`.github/workflows/ci.yml`**: added `docker-build` (pushes to `ghcr.io` on main/tag push, using the built-in `GITHUB_TOKEN` — no separate registry account needed) and `deploy` (SSH + `blue-green.sh` on a `v*` tag, gated by secrets that don't exist yet, fails closed). **A background automated security review caught two real issues, both fixed**: `${{ github.ref_name }}` was interpolated directly into a `run:` shell block reaching a remote `ssh` command (script-injection risk) — fixed by reading it into `env: REF_NAME`, validating against `v[0-9]*.[0-9]*.[0-9]*`, and using only the quoted shell variable inside the script; and `webfactory/ssh-agent` plus the four new `docker/*` actions were pinned by mutable version tag — fixed by resolving each to its real commit SHA via `gh api repos/<owner>/<repo>/git/refs/tags/<tag>` and pinning to that SHA with a `# vX.Y.Z` comment.
+- **`apps/frontend/vercel.json`** (new): `cd ../..` build/install commands so the monorepo root install and the `@medcore/types`-must-build-first rule are respected even with Vercel's Root Directory set to `apps/frontend`. Vercel connects via its own GitHub App integration (documented in the runbook), not a custom Actions job — no token to manage.
+- **`docs/13-DEPLOYMENT-RUNBOOK.md`** (new): GitHub remote + branch protection, AWS IAM/S3/RDS CLI commands, Upstash, EC2 host setup, `.env.production`'s shape, Let's Encrypt issuance, Vercel setup, optional Sentry setup, first deploy, every subsequent deploy, rollback, and the schema-migration-on-deploy caveat.
+- Re-verified after every change: backend typecheck/lint/unit(7/7)/e2e(448/448, 19 suites), frontend typecheck/lint/unit(140/140), Playwright 47/47 against the rebuilt production containers.
+- **Phase 16 is not committed yet.**
+
+Current objective: **wait for the user** to say whether to commit Phase 16, then "START PHASE 17" (Documentation & Delivery).
 
 ## Current State
 
-**Sixteen phases built** (0 through 15, plus 13B), each with a review at `docs/phase-reviews/PHASE-{0..15,13B}-REVIEW.md`:
+**Seventeen phases built** (0 through 16, plus 13B), each with a review at `docs/phase-reviews/PHASE-{0..16,13B}-REVIEW.md`:
 - Phases 0–9: PASS.
-- Phases 10–15: PASS WITH DOCUMENTED MINOR ISSUES.
+- Phases 10–16: PASS WITH DOCUMENTED MINOR ISSUES.
   - Live Stripe/Razorpay: UNVERIFIED (no test keys).
   - Live Resend/Twilio: UNVERIFIED (no credentials).
+  - Live Sentry, AWS EC2/RDS/S3, Vercel, and a real GitHub Actions run: UNVERIFIED (Phase 16, no accounts/remote — see `PHASE-16-REVIEW.md`).
   - Phase 13's UNVERIFIED Playwright rerun is **closed** (35/35, an earlier session).
 
-**Git:** an earlier session committed Phase 13 (`e6d4a32`), Phase 13B (`cfb6944`), and the 13B follow-up (`d320ea2`). This session committed Phase 14 (`6146fa0`, handoff update `db48ff8`, `730ae55`). **Phase 15 is uncommitted in the working tree.** Exclude `.claude-flow/` when staging — it's untracked cruft from a claude-flow/ruflo plugin scattered across the tree, not project output.
+**Git:** an earlier session committed Phase 13 (`e6d4a32`), Phase 13B (`cfb6944`), and the 13B follow-up (`d320ea2`). A later session committed Phase 14 (`6146fa0`, handoff update `db48ff8`, `730ae55`) and Phase 15 (`6f36c82`). **Phase 16 is uncommitted in the working tree.** Exclude `.claude-flow/` when staging — it's untracked cruft from a claude-flow/ruflo plugin scattered across the tree, not project output.
 
 **What Phase 15 delivered (details in `PHASE-15-REVIEW.md`, D-044):**
 - `apps/backend/test/route-authorization.e2e-spec.ts` (new) — SEC-AUTHZ-001's static check.
@@ -168,11 +184,12 @@ Current objective: **wait for the user** to say whether to commit Phase 15, then
 
 ## Active Files
 
-Relevant to what comes next (committing Phase 15, then Phase 16 — Deployment & DevOps):
-- **Plan and specs:** `docs/05-DEVELOPMENT-PLAN.md` (Phase 16), `docs/11-DECISIONS.md` D-044, `docs/phase-reviews/PHASE-15-REVIEW.md`.
-- **CI:** `.github/workflows/ci.yml` (fixed this phase; still unverified against real GitHub Actions since there's no remote — Phase 16 provisions real infrastructure, and wiring a remote would let this run for real).
-- **The audit-log tripwire:** `apps/backend/test/audit-log.e2e-spec.ts` (`test.failing` test), `apps/backend/src/common/audit/audit-log.extension.ts` (the comment explaining why the obvious fix doesn't work).
-- **The SEC-AUTHZ-001 check:** `apps/backend/test/route-authorization.e2e-spec.ts`.
+Relevant to what comes next (committing Phase 16, then Phase 17 — Documentation & Delivery — or, per the runbook, actually executing `docs/13-DEPLOYMENT-RUNBOOK.md` for a real deploy):
+- **Plan and specs:** `docs/05-DEVELOPMENT-PLAN.md` (Phase 17), `docs/phase-reviews/PHASE-16-REVIEW.md`, `docs/13-DEPLOYMENT-RUNBOOK.md`.
+- **Deployment artifacts:** `docker-compose.prod.yml`, `infrastructure/nginx/{nginx.prod.conf,upstream.conf}`, `scripts/deploy/blue-green.sh`, `.github/workflows/ci.yml` (`docker-build`/`deploy` jobs), `apps/frontend/vercel.json`.
+- **Sentry:** `apps/backend/src/common/observability/{sentry.ts,sentry-worker.base.ts}`, `apps/frontend/src/instrumentation{,-client}.ts`.
+- **CI:** `.github/workflows/ci.yml` — still unverified against real GitHub Actions since there's no remote (`docs/13-DEPLOYMENT-RUNBOOK.md` §1 is the first step to close this).
+- **The audit-log tripwire (Phase 15, still open):** `apps/backend/test/audit-log.e2e-spec.ts` (`test.failing` test), `apps/backend/src/common/audit/audit-log.extension.ts` (the comment explaining why the obvious fix doesn't work).
 - **Deferred dependency majors:** `@nestjs/core` (v10→v11, whole framework family), `@faker-js/faker` (9→10, dev-only).
 - **Staff shell and access:** `apps/frontend/src/components/modules/staff-nav.ts` (`STAFF_NAV`, `WORKFLOW_ACCESS`), `components/modules/role-gate.tsx`.
 - **Workflow services:** `apps/frontend/src/services/workflows.ts` (all 13B reads and writes, query-key roots), `services/staff.ts`.
@@ -293,12 +310,12 @@ Relevant to what comes next (committing Phase 15, then Phase 16 — Deployment &
 
 ## Next Steps
 
-1. **Ask the user whether to commit Phase 15.** From the repo root, after the empty-file check:
-   `git add -A -- . ':!**/.claude-flow/**' ':!.claude-flow/**' && git commit -m "feat: Phase 15 — testing & hardening"`
-2. **Wait for "START PHASE 16"** (Deployment & DevOps: production Docker Compose, Nginx TLS, the full GitHub Actions pipeline, AWS provisioning, Vercel frontend deploy, Sentry, blue-green cutover). Carried inputs:
-   - `SEC-FILE-004` (ClamAV) — deferred here specifically because Phase 16 provisions real infrastructure this dev machine doesn't have;
-   - consider wiring this repo to an actual GitHub remote so `ci.yml` can run for real, not just be verified by local reproduction;
-   - the audit-log-outside-transaction refactor (if picked up — it's independent of deployment work, could go earlier);
+1. **Ask the user whether to commit Phase 16.** From the repo root, after the empty-file check:
+   `git add -A -- . ':!**/.claude-flow/**' ':!.claude-flow/**' && git commit -m "feat: Phase 16 — deployment & devops"`
+2. **Wait for "START PHASE 17"** (Documentation & Delivery: README with setup + demo credentials, Swagger finalised, ER/architecture diagrams exported, project report, video walkthrough, final phase-gate review of the whole system). Carried inputs:
+   - if the user wants to actually deploy for real at any point, `docs/13-DEPLOYMENT-RUNBOOK.md` is the ready-to-execute checklist — that's a "run this with your own credentials" task, not something to start unprompted;
+   - `SEC-FILE-004` (ClamAV) — deferred to whenever the EC2 host from the runbook actually exists;
+   - the audit-log-outside-transaction refactor (independent of deployment/docs work, could go earlier);
    - the deferred `@nestjs/core` (v10→v11) and `@faker-js/faker` (9→10) major upgrades;
    - the attachment confirm-upload step;
    - Socket.IO handshake rate limiting;
@@ -410,29 +427,37 @@ pnpm exec dotenv -e ../../.env -- prisma migrate status
 
 | Check | Status | Notes |
 | --- | --- | --- |
-| Git | UNCOMMITTED (Phase 15) | 13 `e6d4a32`, 13B `cfb6944`, follow-up `d320ea2`, 14 `6146fa0` committed; Phase 15 in the working tree; exclude `.claude-flow/` |
+| Git | UNCOMMITTED (Phase 16) | 13 `e6d4a32`, 13B `cfb6944`, follow-up `d320ea2`, 14 `6146fa0`, 15 `6f36c82` committed; Phase 16 in the working tree; exclude `.claude-flow/` |
 | Lint | PASS | Backend and frontend, zero warnings |
 | Typecheck | PASS | Backend, frontend (incl. `e2e/`), types |
-| Unit tests | PASS | Backend 5/5; frontend Vitest 140/140 |
-| Integration/e2e tests | PASS | Backend 448/448, 19/19 suites (+1 suite, +102 tests over Phase 14: route-authorization + the audit-log tripwire) |
-| Browser E2E (Playwright) | PASS | 47/47 against production builds rebuilt with the Phase 15 dependency updates |
-| CI workflow | FIXED, verified by local reproduction | `.github/workflows/ci.yml`'s `integration-tests` job had never run (no git remote); 3 stacked bugs fixed; cannot be confirmed against real GitHub Actions without a remote |
-| Dependency audit | DONE | 43 advisories, all transitive, all traced and assessed; `pnpm update -r` applied and verified safe; `@nestjs/core`/`@faker-js/faker` majors deferred |
-| Security review (OWASP) | PASS | No new Critical/High finding beyond what's fixed this phase; 2 doc inaccuracies corrected |
+| Unit tests | PASS | Backend 7/7 (+2 for the new Sentry worker gating test); frontend Vitest 140/140 |
+| Integration/e2e tests | PASS | Backend 448/448, 19/19 suites |
+| Browser E2E (Playwright) | PASS | 47/47 against production builds rebuilt with Sentry instrumentation active |
+| Blue-green cutover | PASS, proven live | 2/2 runs (blue→green, green→blue) against a real throwaway stack, zero failed requests during either cutover under concurrent polling |
+| CI workflow | FIXED (Phase 15) + extended (Phase 16), verified by local reproduction / YAML validation only | `docker-build` + `deploy` jobs added; 2 real security findings (script injection, unpinned actions) caught by automated review and fixed; still cannot be confirmed against real GitHub Actions without a remote |
+| Security review | PASS | OWASP pass (Phase 15) + this phase's automated review of the new `ci.yml` jobs, both findings fixed |
 | Build | PASS | Frontend production image rebuilt; backend `nest build`; native Windows root `pnpm run build` fails at a known, unrelated Windows-symlink limitation (does not affect CI or Docker) |
 | DB migrations | NOT APPLICABLE | No schema change this phase |
-| Docker | PASS | `postgres`/`redis`/`localstack` healthy throughout; frontend prod image + container built, tested, torn down |
+| Docker | PASS | `postgres`/`redis`/`localstack` healthy throughout; frontend prod image + container + blue-green test stack all built, tested, torn down |
+| Sentry (backend + frontend) | Wiring PASS; live ingestion UNVERIFIED | No Sentry account exists; init/no-op gating and exception-capture wiring verified with a fake DSN |
 | Live Stripe/Razorpay checkout | UNVERIFIED | No test keys |
 | Live Resend/Twilio sends | UNVERIFIED | No credentials |
+| AWS EC2/RDS/S3, Vercel, real GitHub remote | UNVERIFIED | User chose "build ready-to-run, provision nothing live" for Phase 16 — see `PHASE-16-REVIEW.md` |
 
 ## Current Phase Gate
 
-**Phase 15 — Testing & Hardening: PASS WITH DOCUMENTED MINOR ISSUES** (uncommitted). Full detail in `docs/phase-reviews/PHASE-15-REVIEW.md`. All 9 mandatory + 8 risk-based scenarios confirmed tested; `SEC-AUTHZ-001` now has its promised CI check; the CI workflow itself is fixed and proven by local reproduction; the dependency audit traced every advisory to a real exploitability assessment; the coverage gate was measured honestly and revised rather than faked; the Phase 9 audit-log debt was actually investigated (not just re-carried) and is now an active tripwire. No Critical or High severity issue is open. Minor items: deferred `@nestjs/core`/`@faker-js/faker` majors, deferred ClamAV, the audit-log atomicity gap, the Windows-only native build quirk, carried Phase 14 items.
+**Phase 16 — Deployment & DevOps: PASS WITH DOCUMENTED MINOR ISSUES** (uncommitted). Full detail in `docs/phase-reviews/PHASE-16-REVIEW.md`. Sentry wiring, the production Docker Compose topology, the Nginx TLS config, and the blue-green deploy script are all built and verified to the extent a local machine can prove them — the blue-green script specifically was proven end-to-end with a real zero-downtime test, not just read for correctness. The GitHub Actions additions are syntactically valid and had two real security issues (script injection, unpinned third-party actions) caught by an automated review and fixed. Everything requiring a real AWS account, domain, GitHub remote, Vercel project, or Sentry project is explicitly UNVERIFIED rather than assumed working, per the user's own chosen scope for this phase. No Critical or High severity issue is open.
 
-Earlier: Phase 14 PASS WITH DOCUMENTED MINOR ISSUES (committed `6146fa0`); Phase 13B PASS WITH DOCUMENTED MINOR ISSUES (committed `cfb6944` + follow-up `d320ea2`).
+Earlier: Phase 15 PASS WITH DOCUMENTED MINOR ISSUES (committed `6f36c82`); Phase 14 PASS WITH DOCUMENTED MINOR ISSUES (committed `6146fa0`); Phase 13B PASS WITH DOCUMENTED MINOR ISSUES (committed `cfb6944` + follow-up `d320ea2`).
 
 ## Important Decisions / Context
 
+- **Phase 16 (see `PHASE-16-REVIEW.md` for full detail, no new D-number — this phase's decisions are all either already covered by `03-ARCHITECTURE.md`/`09-SECURITY.md` or are implementation detail, not new architectural calls):**
+  - user-chosen scope: build ready-to-run, provision nothing live;
+  - `ghcr.io` over Docker Hub for the image registry (no separate account, uses `GITHUB_TOKEN`);
+  - Vercel's own GitHub App integration over a custom Actions job (no token to manage);
+  - `withSentryConfig` skipped (not exported the documented way in the installed SDK version, and source-map upload has no credentials to use anyway);
+  - two real security findings from an automated review fixed (ref-name script injection, unpinned third-party Actions) — see the phase review's Security Review section for exactly what changed.
 - **D-044 (Phase 15):**
   - the CI workflow's 3 stacked bugs (types build, required env vars, LocalStack) fixed and proven by local reproduction, since no git remote exists to run it for real;
   - `SEC-AUTHZ-001`'s promised static check added (`test/route-authorization.e2e-spec.ts`) alongside the pre-existing `RolesGuard` runtime deny-by-default;
