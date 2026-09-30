@@ -26,6 +26,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Phase 17 deliverable: "ER Diagram — full database entity-relationship
+// diagram (generated from Prisma)". Runs on every `prisma generate`,
+// rendering straight from this file so it can never drift from the actual
+// schema the way a hand-drawn diagram could.
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "../../../docs/diagrams/er-diagram.svg"
+  theme    = "forest"
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Enums
 // ─────────────────────────────────────────────────────────────────────────

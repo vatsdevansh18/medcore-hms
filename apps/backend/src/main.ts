@@ -5,6 +5,7 @@ import { ConfigService } from "@nestjs/config";
 import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module";
 import { configureApp } from "./common/bootstrap/configure-app";
+import { configureSwagger } from "./common/bootstrap/configure-swagger";
 import { initSentry, installProcessErrorHandlers } from "./common/observability/sentry";
 
 // Before anything else: Sentry must be initialised before Nest (or any of
@@ -29,6 +30,7 @@ async function bootstrap() {
   });
 
   configureApp(app);
+  configureSwagger(app);
 
   const port = config.get<number>("API_PORT", 3001);
   await app.listen(port);
