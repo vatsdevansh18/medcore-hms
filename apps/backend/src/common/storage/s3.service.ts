@@ -82,8 +82,25 @@ export class S3Service implements OnModuleInit {
     // signatures, lab report files) failed its preflight; server-side tests
     // never noticed because Node doesn't enforce CORS (found in Phase 13B,
     // docs/11-DECISIONS.md D-042). Applied on every start, so the rule
-    // follows CORS_ORIGIN. Production buckets get the same rule from infra.
-    await this.client.send(new PutBucketCorsCommand({ Bucket: this.bucket, CORSConfiguration: this.corsConfiguration() }));
+    // follows CORS_ORIGIN. Production buckets get the same rule from infra —
+    // which is also why this is best-effort, not fatal: a least-privilege
+    // bucket credential (e.g. an R2 "Object Read & Write" token, which
+    // covers Get/Put/DeleteObject but not bucket-admin operations) gets
+    // AccessDenied here, same as real AWS S3 would for a scoped IAM policy
+    // without s3:PutBucketCors. That's an access-control decision made
+    // outside the app, not a misconfiguration the app should crash over —
+    // the bucket's CORS rule just needs to be set once, out of band (the
+    // provider's console, same as a real AWS deploy already assumed). D-045.
+    try {
+      await this.client.send(
+        new PutBucketCorsCommand({ Bucket: this.bucket, CORSConfiguration: this.corsConfiguration() }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Could not set bucket CORS on "${this.bucket}" (credential likely lacks bucket-admin permission) — ` +
+          `set it manually via the provider's console if browser uploads fail preflight. ${String(error)}`,
+      );
+    }
   }
 
   /** The bucket CORS rule browsers need for pre-signed uploads and
