@@ -45,7 +45,15 @@ export interface RequestOptions {
 }
 
 export function buildUrl(path: string, query?: Record<string, QueryValue>): string {
-  const url = new URL(`${API_BASE_URL}${path}`);
+  // API_BASE_URL is relative ("/api") in a split-domain deployment proxied
+  // through next.config.ts's rewrite (D-045) — `new URL()` throws on a
+  // relative string with no base, which every caller here then reports as
+  // "couldn't reach MedCore" (lib/errors.ts maps TypeError to that message),
+  // masking the real cause. Passing window.location.origin as the base
+  // fixes the relative case and is a no-op when API_BASE_URL is already
+  // absolute (dev, Docker), since `new URL()` ignores the base then.
+  const base = typeof window !== "undefined" ? window.location.origin : undefined;
+  const url = new URL(`${API_BASE_URL}${path}`, base);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
   }
