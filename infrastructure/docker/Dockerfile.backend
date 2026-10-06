@@ -65,5 +65,14 @@ COPY --from=build /workspace/apps/backend/package.json ./apps/backend/package.js
 COPY --from=build /workspace/node_modules ./node_modules
 COPY --from=build /workspace/apps/backend/node_modules ./apps/backend/node_modules
 COPY --from=build /workspace/packages ./packages
+# The generated Prisma Client's query engine is already baked in at `prisma
+# generate` time (build stage) and needs nothing further — but `prisma
+# migrate deploy` is a separate CLI operation that reads schema.prisma and
+# prisma/migrations/*.sql directly, and without this line those files never
+# make it into the runtime image at all (only dist/ does). A container built
+# from this image couldn't run its own migrations. Found while actually
+# deploying for the first time (docs/13-DEPLOYMENT-RUNBOOK.md §13's command
+# was never exercised against a real host until then).
+COPY --from=build /workspace/apps/backend/prisma ./apps/backend/prisma
 EXPOSE 3001
 CMD ["node", "apps/backend/dist/main.js"]

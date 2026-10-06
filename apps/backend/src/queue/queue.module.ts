@@ -14,6 +14,7 @@ import { MedicinesModule } from "../medicines/medicines.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { MedicineExpiryScanProcessor } from "./medicine-expiry-scan.processor";
 import { MedicineExpiryScanScheduler } from "./medicine-expiry-scan.scheduler";
+import { parseRedisConnection } from "./redis-connection.util";
 
 /**
  * BullMQ needs its own Redis connection, never the shared `REDIS_CLIENT`
@@ -22,24 +23,16 @@ import { MedicineExpiryScanScheduler } from "./medicine-expiry-scan.scheduler";
  * behavior; a finite `maxRetriesPerRequest` — set to `3` on the shared
  * client for the throttler's use case — makes BullMQ throw at startup).
  * Parsed from the same `REDIS_URL` as everywhere else, just a distinct
- * connection.
+ * connection — see `redis-connection.util.ts` for why this can't just hand
+ * BullMQ the URL string the way `new Redis(url)` elsewhere does.
  */
 @Module({
   imports: [
     BullModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const url = new URL(config.getOrThrow<string>("REDIS_URL"));
-        return {
-          connection: {
-            host: url.hostname,
-            port: Number(url.port || 6379),
-            password: url.password || undefined,
-            db: url.pathname ? Number(url.pathname.slice(1) || 0) : 0,
-            maxRetriesPerRequest: null,
-          },
-        };
-      },
+      useFactory: (config: ConfigService) => ({
+        connection: parseRedisConnection(config.getOrThrow<string>("REDIS_URL")),
+      }),
     }),
     BullModule.registerQueue({
       name: APPOINTMENT_REMINDER_QUEUE,

@@ -1,10 +1,16 @@
 /** API base, e.g. http://localhost:3001/api. The browser calls the API
  * directly (CORS allow-list + credentials), so the API sees the real client
- * IP for rate limiting (docs/11-DECISIONS.md D-038). */
+ * IP for rate limiting (docs/11-DECISIONS.md D-038) — except in a
+ * split-domain deployment, where this is instead a same-origin relative path
+ * ("/api") proxied server-side by next.config.ts's rewrite (D-045). */
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/api";
 
-/** Origin of the API, for the Socket.IO connection (namespace /notifications). */
-export const API_ORIGIN = new URL(API_BASE_URL).origin;
+/** Origin of the API, for the Socket.IO connection (namespace /notifications).
+ * Sockets authenticate with the in-memory access token, not the refresh
+ * cookie, so they always reach the API directly regardless of the rewrite
+ * above — but that means this can't be derived from API_BASE_URL once
+ * API_BASE_URL is a relative path ("/api") with no origin to parse. D-045. */
+export const API_ORIGIN = process.env.NEXT_PUBLIC_SOCKET_ORIGIN ?? new URL(API_BASE_URL).origin;
 
 export const ROUTES = {
   login: "/login",

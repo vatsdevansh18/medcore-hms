@@ -3,6 +3,7 @@ import { InjectQueue } from "@nestjs/bullmq";
 import { ConfigService } from "@nestjs/config";
 import { QueueEvents, type Queue } from "bullmq";
 import { PRESCRIPTION_PDF_QUEUE, type PrescriptionPdfJobData } from "./queue.constants";
+import { parseRedisConnection } from "./redis-connection.util";
 
 /** FR-RX-003 — enqueues the async PDF render for a newly-created (or
  * superseding) prescription. `jobId = prescriptionId` both dedupes retries
@@ -22,15 +23,8 @@ export class PrescriptionPdfQueueService implements OnApplicationShutdown {
     @InjectQueue(PRESCRIPTION_PDF_QUEUE) private readonly queue: Queue<PrescriptionPdfJobData>,
     config: ConfigService,
   ) {
-    const url = new URL(config.getOrThrow<string>("REDIS_URL"));
     this.queueEvents = new QueueEvents(PRESCRIPTION_PDF_QUEUE, {
-      connection: {
-        host: url.hostname,
-        port: Number(url.port || 6379),
-        password: url.password || undefined,
-        db: url.pathname ? Number(url.pathname.slice(1) || 0) : 0,
-        maxRetriesPerRequest: null,
-      },
+      connection: parseRedisConnection(config.getOrThrow<string>("REDIS_URL")),
     });
   }
 
