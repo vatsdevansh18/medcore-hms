@@ -3,8 +3,19 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    // "Node"/"node10" classic resolution is deprecated (TS 5.0+) and some
+    // TypeScript builds now hard-error on it (TS5108) rather than just warn
+    // — caught deploying to Render, whose build pulled in a TypeScript that
+    // enforces this where the locally-pinned 5.9.3 only warns. "Node16" is
+    // the modern, non-deprecated replacement for a package that compiles to
+    // plain CommonJS for Node consumption (no bundler involved, unlike the
+    // ESNext/Bundler pairing the monorepo base config uses for the
+    // frontend). Output is unaffected: packages/types has zero external
+    // imports to resolve differently, only relative ones, and Node16's
+    // module emit still produces CommonJS here since this package's
+    // package.json has no "type": "module".
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "declaration": true
   },
   "include": ["src"]
