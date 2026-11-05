@@ -6,9 +6,14 @@ Built across 17 phases under a strict phase-gated methodology. Full product/arch
 
 ## Live Demo
 
-**Not currently deployed.** `docs/13-DEPLOYMENT-RUNBOOK.md` is a complete, ready-to-execute checklist (AWS EC2/RDS/S3, Upstash Redis, Vercel, Let's Encrypt) for standing up a live instance — Phase 16 built and locally verified every piece of that pipeline (including a health-check-gated blue-green deploy script, proven zero-downtime end to end) without provisioning real, billable cloud infrastructure. See `docs/phase-reviews/PHASE-16-REVIEW.md` for exactly what's built-and-verified versus pending real credentials.
+**Live now, on a free-tier stack:**
 
-Once deployed, this section names the live frontend (Vercel) and API (`https://api.<domain>/api`, with Swagger UI at `https://api.<domain>/api/docs`) URLs.
+- **App:** https://medcore-hms-umber.vercel.app
+- **API:** https://medcore-hms-api-w4sw.onrender.com/api (Swagger UI at [`/api/docs`](https://medcore-hms-api-w4sw.onrender.com/api/docs))
+
+Sign in with any account from the Demo Credentials table below. The backend is on Render's free tier, which sleeps after 15 minutes of inactivity — the first request after a gap takes 30–60 seconds to wake up; that's expected, not a bug.
+
+This is a separate, lighter-weight deployment from the one `docs/13-DEPLOYMENT-RUNBOOK.md` describes: Vercel (frontend) + Render (API) + Neon (Postgres) + Upstash (Redis) + Cloudflare R2 (S3-compatible storage), chosen to get a real, working link in front of a reviewer without provisioning billable AWS infrastructure. `docs/11-DECISIONS.md` D-045 has the full story, including two real bugs this deployment surfaced that no prior local/Docker/CI verification had caught. The original AWS/EC2/RDS runbook remains fully built and ready to execute if a more traditional deployment is ever needed — see `docs/phase-reviews/PHASE-16-REVIEW.md`.
 
 ## Demo Credentials
 
@@ -31,9 +36,11 @@ Hospital slugs: `medcore-city` (Bengaluru), `medcore-metro` (Pune).
 | Role | Email |
 | --- | --- |
 | Super Admin (platform-wide, all hospitals) | `superadmin@medcore.test` |
-| Patient (×30, across both hospitals) | any `*@patient.medcore.test` address — see `apps/backend/prisma/seed.ts` for the generated list, or sign in as staff and look up a patient by name |
+| Patient (×30, across both hospitals) | e.g. `alda.smith-predovic.5@patient.medcore.test`, `burdette.yost.1@patient.medcore.test`, `celia.bauch.12@patient.medcore.test` (all `Demo123!`). Others: sign in as staff and look up a patient, or see `apps/backend/prisma/seed.ts` |
 
-The history seed also adds a second Lab Technician per hospital (`lab_reviewer@<hospital-slug>.medcore.test`) so the four-eyes lab-result approval workflow (`FR-LAB-004`) has two distinct testable accounts.
+The history seed also adds a second Lab Technician per hospital so the four-eyes lab-result approval workflow (`FR-LAB-004`) has two distinct testable accounts: `lab_reviewer@medcore-city-hospital.medcore.test` and `lab_reviewer@medcore-metro-clinic.medcore.test` (the domain uses the hospital's full name, not the short slug).
+
+> **Patient self-registration on the live demo:** the form works, but the demo has no email/SMS provider configured (Resend/Twilio are deliberately unconfigured, `docs/11-DECISIONS.md` D-045), so the verification code is never delivered. Use the seeded patient accounts above to explore the patient portal. Run locally and the code is printed in the backend terminal (`Email OTP for ...`). With a `RESEND_API_KEY` set, delivery works.
 
 ## Architecture Overview
 
